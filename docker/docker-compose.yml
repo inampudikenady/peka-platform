@@ -1,32 +1,32 @@
 services:
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: aiwiki-qdrant
+    container_name: peka-qdrant
     restart: unless-stopped
     ports:
       - "6333:6333"
     volumes:
-      - /data/qdrant:/qdrant/storage
+      - ${PEKA_DATA_DIR:-/opt/peka/data}/qdrant:/qdrant/storage
 
   ollama:
     image: ollama/ollama:latest
-    container_name: aiwiki-ollama
+    container_name: peka-ollama
     restart: unless-stopped
     ports:
       - "11434:11434"
     volumes:
-      - /data/ollama:/root/.ollama
+      - ${PEKA_DATA_DIR:-/opt/peka/data}/ollama:/root/.ollama
 
   open-webui:
     image: ghcr.io/open-webui/open-webui:main
-    container_name: aiwiki-openwebui
+    container_name: peka-openwebui
     restart: unless-stopped
     ports:
       - "3000:8080"
     environment:
       - OLLAMA_BASE_URL=http://ollama:11434
-      - WEBUI_NAME=AIWiki POC
+      - WEBUI_NAME=PEKA
     volumes:
-      - /data/openwebui:/app/backend/data
+      - ${PEKA_DATA_DIR:-/opt/peka/data}/openwebui:/app/backend/data
     depends_on:
       - ollama

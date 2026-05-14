@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
+docker compose --env-file .env -f docker/docker-compose.yml down
+echo "PEKA Docker stack stopped."

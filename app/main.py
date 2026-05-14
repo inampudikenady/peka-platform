@@ -1,3 +1,7 @@
+import os
+from typing import List
+
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -5,68 +9,77 @@ from pydantic import BaseModel
 from llama_index.core import VectorStoreIndex, StorageContext
 from llama_index.core.prompts import PromptTemplate
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.vector_stores.qdrant import QdrantVectorStore
 from llama_index.llms.ollama import Ollama
+from llama_index.vector_stores.qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
 
-COLLECTION_NAME = "unixdocs"
+load_dotenv()
 
-app = FastAPI(title="CSI Global Services Operations Knowledge Assistant")
+APP_NAME = os.getenv("PEKA_APP_NAME", "PEKA")
+APP_FULL_NAME = os.getenv("PEKA_APP_FULL_NAME", "Private Enterprise Knowledge Assistant")
+DATASET_NAME = os.getenv("PEKA_DATASET_NAME", "Demo Enterprise Knowledge Base")
+COLLECTION_NAME = os.getenv("PEKA_COLLECTION", "unixdocs")
+EMBED_MODEL_NAME = os.getenv("PEKA_EMBED_MODEL", "BAAI/bge-base-en-v1.5")
+LLM_MODEL = os.getenv("PEKA_MODEL", "qwen2.5:3b")
+QDRANT_HOST = os.getenv("PEKA_QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("PEKA_QDRANT_PORT", "6333"))
+RETRIEVAL_TOP_K = int(os.getenv("PEKA_RETRIEVAL_TOP_K", "8"))
+FINAL_TOP_K = int(os.getenv("PEKA_FINAL_TOP_K", "2"))
+LLM_TIMEOUT = float(os.getenv("PEKA_LLM_TIMEOUT", "1800"))
+
+app = FastAPI(title=f"{APP_NAME} - {APP_FULL_NAME}")
 
 
 class AskRequest(BaseModel):
     question: str
 
 
-print("Loading embedding model...")
-embed_model = HuggingFaceEmbedding(
-    model_name="BAAI/bge-base-en-v1.5"
-)
+class AskResponse(BaseModel):
+    question: str
+    answer: str
+    sources: List[dict]
 
-print("Connecting to Qdrant...")
-qdrant_client = QdrantClient(
-    host="localhost",
-    port=6333
-)
+
+print(f"Loading embedding model: {EMBED_MODEL_NAME}")
+embed_model = HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME)
+
+print(f"Connecting to Qdrant: {QDRANT_HOST}:{QDRANT_PORT}, collection={COLLECTION_NAME}")
+qdrant_client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
 vector_store = QdrantVectorStore(
     client=qdrant_client,
-    collection_name=COLLECTION_NAME
+    collection_name=COLLECTION_NAME,
 )
 
-storage_context = StorageContext.from_defaults(
-    vector_store=vector_store
-)
+storage_context = StorageContext.from_defaults(vector_store=vector_store)
 
-print("Connecting to Ollama...")
+print(f"Connecting to Ollama model: {LLM_MODEL}")
 llm = Ollama(
-    model="qwen2.5:3b",
-    request_timeout=1800.0,
-    temperature=0
+    model=LLM_MODEL,
+    request_timeout=LLM_TIMEOUT,
+    temperature=0,
 )
 
 index = VectorStoreIndex.from_vector_store(
     vector_store=vector_store,
     embed_model=embed_model,
-    storage_context=storage_context
+    storage_context=storage_context,
 )
 
-retriever = index.as_retriever(
-    similarity_top_k=8
-)
+retriever = index.as_retriever(similarity_top_k=RETRIEVAL_TOP_K)
 
 qa_prompt = PromptTemplate(
     """
-You are an internal infrastructure operations knowledge assistant for CSI Global Services.
+You are PEKA, a private enterprise operational knowledge assistant.
 
-The indexed knowledge base currently contains operational DokuWiki documentation from the client Tenneco.
+The indexed knowledge base currently contains: {dataset_name}
 
 Use ONLY the context below.
 Do not use outside knowledge.
-Do not invent commands.
+Do not invent commands, systems, incidents, or relationships.
 If the context does not contain the answer, say:
-"I could not find this in the indexed Tenneco wiki documents."
+"I could not find this in the indexed enterprise knowledge base."
 
 Return ONLY:
 1. Short answer
@@ -88,7 +101,13 @@ Answer:
 )
 
 
-def rerank_nodes(question: str, nodes, final_k: int = 2):
+def rerank_nodes(question: str, nodes, final_k: int = FINAL_TOP_K):
+    """Simple POC reranker.
+
+    This combines vector score with lightweight keyword boosts/penalties.
+    It is intentionally transparent and easy to replace later with proper
+    hybrid search, metadata filters, or a reranker model.
+    """
     q = question.lower()
 
     boost_terms = []
@@ -104,11 +123,14 @@ def rerank_nodes(question: str, nodes, final_k: int = 2):
     if "sap" in q:
         boost_terms += ["sap"]
 
-    if any(x in q for x in ["vmware", "vcenter", "powercli"]):
-        boost_terms += ["vmware", "vcenter", "powercli"]
+    if any(x in q for x in ["vmware", "vcenter", "powercli", "vsphere"]):
+        boost_terms += ["vmware", "vcenter", "powercli", "vsphere"]
 
     if any(x in q for x in ["oracle", "rac", "database", "db"]):
         boost_terms += ["oracle", "rac", "db", "database"]
+
+    if any(x in q for x in ["incident", "ticket", "change", "cmdb", "servicenow"]):
+        boost_terms += ["incident", "ticket", "change", "cmdb", "servicenow"]
 
     scored = []
 
@@ -137,15 +159,20 @@ def rerank_nodes(question: str, nodes, final_k: int = 2):
     return [node for score, node in scored[:final_k]]
 
 
+def source_filename(file_path: str) -> str:
+    return file_path.split("/")[-1] if file_path else "unknown"
+
+
 @app.get("/")
 def root():
     return {
         "status": "ok",
-        "service": "CSI Global Services Operations Knowledge Assistant",
-        "client_dataset": "Tenneco DokuWiki",
+        "service": f"{APP_NAME} - {APP_FULL_NAME}",
+        "dataset": DATASET_NAME,
         "collection": COLLECTION_NAME,
-        "model": "qwen2.5:3b",
-        "retrieval": "top8_rerank_to_top2",
+        "model": LLM_MODEL,
+        "embedding_model": EMBED_MODEL_NAME,
+        "retrieval": f"top{RETRIEVAL_TOP_K}_rerank_to_top{FINAL_TOP_K}",
         "ui": "/ui",
     }
 
@@ -155,10 +182,10 @@ def health():
     return {"status": "healthy"}
 
 
-@app.post("/ask")
+@app.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
     raw_nodes = retriever.retrieve(req.question)
-    selected_nodes = rerank_nodes(req.question, raw_nodes, final_k=2)
+    selected_nodes = rerank_nodes(req.question, raw_nodes, final_k=FINAL_TOP_K)
 
     context = "\n\n---\n\n".join(
         [
@@ -168,16 +195,19 @@ def ask(req: AskRequest):
     )
 
     prompt = qa_prompt.format(
+        dataset_name=DATASET_NAME,
         context_str=context,
-        query_str=req.question
+        query_str=req.question,
     )
 
     response = llm.complete(prompt)
 
     sources = []
     for node in selected_nodes:
+        path = node.metadata.get("file_path")
         sources.append({
-            "file_path": node.metadata.get("file_path"),
+            "file_path": path,
+            "file_name": source_filename(path),
             "original_vector_score": node.score,
         })
 
@@ -190,38 +220,38 @@ def ask(req: AskRequest):
 
 @app.get("/ui", response_class=HTMLResponse)
 def ui():
-    return """
+    return f"""
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CSI Global Services - Operations Knowledge Assistant</title>
+    <title>{APP_NAME} - {APP_FULL_NAME}</title>
     <style>
-        body {
+        body {{
             font-family: Arial, sans-serif;
             background: #f5f7fb;
             margin: 0;
             padding: 40px;
-        }
-        .container {
-            max-width: 950px;
+        }}
+        .container {{
+            max-width: 980px;
             margin: auto;
             background: white;
             padding: 30px;
             border-radius: 14px;
             box-shadow: 0 4px 18px rgba(0,0,0,0.08);
-        }
-        h1 {
+        }}
+        h1 {{
             margin-top: 0;
             color: #1f2937;
-            font-size: 36px;
-        }
-        .subtitle {
+            font-size: 40px;
+        }}
+        .subtitle {{
             font-size: 18px;
             color: #374151;
-            margin-top: -12px;
+            margin-top: -14px;
             margin-bottom: 20px;
-        }
-        .info-box {
+        }}
+        .info-box {{
             background: #eef2ff;
             padding: 14px;
             border-radius: 8px;
@@ -230,8 +260,8 @@ def ui():
             border-left: 4px solid #2563eb;
             color: #1f2937;
             line-height: 1.45;
-        }
-        textarea {
+        }}
+        textarea {{
             width: 100%;
             height: 95px;
             font-size: 16px;
@@ -239,8 +269,8 @@ def ui():
             border-radius: 8px;
             border: 1px solid #ccc;
             box-sizing: border-box;
-        }
-        button {
+        }}
+        button {{
             margin-top: 12px;
             padding: 12px 22px;
             font-size: 16px;
@@ -249,11 +279,9 @@ def ui():
             background: #2563eb;
             color: white;
             cursor: pointer;
-        }
-        button:disabled {
-            background: #9ca3af;
-        }
-        .answer {
+        }}
+        button:disabled {{ background: #9ca3af; }}
+        .answer {{
             margin-top: 25px;
             padding: 18px;
             background: #f9fafb;
@@ -261,141 +289,123 @@ def ui():
             white-space: pre-wrap;
             border-radius: 8px;
             line-height: 1.45;
-        }
-        .sources {
+        }}
+        .sources {{
             margin-top: 20px;
             font-size: 14px;
             color: #374151;
-        }
-        .source-item {
+        }}
+        .source-item {{
             background: #eef2ff;
             padding: 8px;
             margin-top: 6px;
             border-radius: 6px;
             word-break: break-all;
-        }
-        .examples {
-            margin-top: 20px;
-            color: #4b5563;
-        }
-        .example {
-            cursor: pointer;
-            color: #2563eb;
-            margin-bottom: 8px;
-        }
-        .footer {
+        }}
+        .examples {{ margin-top: 20px; color: #4b5563; }}
+        .example {{ cursor: pointer; color: #2563eb; margin-bottom: 8px; }}
+        .footer {{
             margin-top: 30px;
             font-size: 13px;
             color: #6b7280;
             border-top: 1px solid #e5e7eb;
             padding-top: 14px;
-        }
+        }}
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>CSI Global Services</h1>
-        <div class="subtitle">Infrastructure Operations Knowledge Assistant</div>
+        <h1>{APP_NAME}</h1>
+        <div class="subtitle">{APP_FULL_NAME}</div>
 
         <div class="info-box">
             <b>Indexed Knowledge Sources</b><br><br>
-            • Tenneco operational DokuWiki knowledge base<br>
-            • Unix/Linux infrastructure procedures<br>
-            • SAP operational documentation<br>
-            • VMware and PowerCLI procedures<br>
-            • AIX / VIOS operational runbooks<br>
-            • Oracle RAC and migration procedures<br><br>
-            Current environment: <b>POC</b>
+            • {DATASET_NAME}<br>
+            • Operational runbooks and procedures<br>
+            • Infrastructure knowledge and troubleshooting notes<br>
+            • Future integrations: CMDB, RVTools/vCenter, monitoring, and logs<br><br>
+            Current environment: <b>POC</b><br>
+            Model: <b>{LLM_MODEL}</b> | Collection: <b>{COLLECTION_NAME}</b>
         </div>
 
-        <textarea id="question" placeholder="Ask infrastructure or operational questions..."></textarea>
+        <textarea id="question" placeholder="Ask enterprise infrastructure or operational questions..."></textarea>
         <br>
         <button id="askBtn" onclick="askQuestion()">Ask</button>
 
         <div class="examples">
             <b>Example questions:</b>
-
-            <div class="example" onclick="setQuestion('What SAP failover procedures do we have for Tenneco?')">
-                What SAP failover procedures do we have for Tenneco?
-            </div>
-
-            <div class="example" onclick="setQuestion('Show VMware related operational procedures.')">
-                Show VMware related operational procedures.
-            </div>
-
-            <div class="example" onclick="setQuestion('What AIX migration procedures are documented?')">
-                What AIX migration procedures are documented?
-            </div>
-
-            <div class="example" onclick="setQuestion('Show Oracle RAC migration related notes.')">
-                Show Oracle RAC migration related notes.
-            </div>
-
-            <div class="example" onclick="setQuestion('How do we expand a filesystem in RHEL?')">
-                How do we expand a filesystem in RHEL?
-            </div>
+            <div class="example" onclick="setQuestion('What SAP failover procedures do we have?')">What SAP failover procedures do we have?</div>
+            <div class="example" onclick="setQuestion('Show VMware related operational procedures.')">Show VMware related operational procedures.</div>
+            <div class="example" onclick="setQuestion('What AIX migration procedures are documented?')">What AIX migration procedures are documented?</div>
+            <div class="example" onclick="setQuestion('Show Oracle RAC migration related notes.')">Show Oracle RAC migration related notes.</div>
+            <div class="example" onclick="setQuestion('How do we expand a filesystem in RHEL?')">How do we expand a filesystem in RHEL?</div>
         </div>
 
         <div id="output"></div>
 
         <div class="footer">
-            Powered by CSI Global Services internal POC stack: FastAPI, Qdrant, Ollama, and indexed Tenneco DokuWiki data.
+            PEKA POC stack: FastAPI, Qdrant, Ollama, local embeddings, and enterprise knowledge retrieval.
         </div>
     </div>
 
 <script>
-function setQuestion(q) {
+function setQuestion(q) {{
     document.getElementById("question").value = q;
-}
+}}
 
-async function askQuestion() {
+async function askQuestion() {{
     const question = document.getElementById("question").value;
     const output = document.getElementById("output");
     const btn = document.getElementById("askBtn");
 
-    if (!question.trim()) {
+    if (!question.trim()) {{
         alert("Enter a question first.");
         return;
-    }
+    }}
 
     btn.disabled = true;
     btn.innerText = "Thinking...";
-    output.innerHTML = "<div class='answer'>Processing... this may take 1-3 minutes on the current CPU-only POC VM.</div>";
+    output.innerHTML = "<div class='answer'>Processing... CPU-only POC responses may take 1-3 minutes.</div>";
 
-    try {
-        const response = await fetch("/ask", {
+    try {{
+        const response = await fetch("/ask", {{
             method: "POST",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({question: question})
-        });
+            headers: {{"Content-Type": "application/json"}},
+            body: JSON.stringify({{question: question}})
+        }});
 
         const data = await response.json();
+
+        if (!response.ok) {{
+            throw new Error(data.detail || "Request failed");
+        }}
 
         let html = "<div class='answer'><b>Answer:</b>\\n\\n" + escapeHtml(data.answer) + "</div>";
 
         html += "<div class='sources'><b>Sources:</b>";
-        data.sources.forEach(src => {
-            html += "<div class='source-item'>" + escapeHtml(src.file_path) +
+        data.sources.forEach(src => {{
+            html += "<div class='source-item'><b>" + escapeHtml(src.file_name || "unknown") + "</b>" +
+                    "<br>" + escapeHtml(src.file_path || "") +
                     "<br>Score: " + src.original_vector_score + "</div>";
-        });
+        }});
         html += "</div>";
 
         output.innerHTML = html;
 
-    } catch (err) {
+    }} catch (err) {{
         output.innerHTML = "<div class='answer'>Error: " + escapeHtml(err.toString()) + "</div>";
-    }
+    }}
 
     btn.disabled = false;
     btn.innerText = "Ask";
-}
+}}
 
-function escapeHtml(text) {
-    return text
+function escapeHtml(text) {{
+    return String(text)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-}
+}}
 </script>
 </body>
 </html>

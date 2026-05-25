@@ -1,0 +1,8 @@
+- targets: ["10.50.1.4:9256"]
+  labels:
+    host: "peka-dev-ai-001"
+    os: "linux"
+- targets: ["10.70.1.5:9256"]
+  labels:
+    host: "peka-dev-linux-sea-001"
+    os: "linux"

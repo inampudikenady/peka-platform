@@ -1,0 +1,9 @@
+linux:
+  - hostname: peka-dev-ai-001
+    ip: 10.50.1.4
+  - hostname: peka-dev-linux-sea-001
+    ip: 10.70.1.5
+
+windows:
+  - hostname: peka-dev-win-sea-001
+    ip: 10.70.1.4

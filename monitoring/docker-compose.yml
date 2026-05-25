@@ -10,6 +10,9 @@ services:
 
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/linux-targets.yml:/etc/prometheus/linux-targets.yml:ro
+      - ./prometheus/linux-process-targets.yml:/etc/prometheus/linux-process-targets.yml:ro
+      - ./prometheus/windows-targets.yml:/etc/prometheus/windows-targets.yml:ro
       - ./data/prometheus:/prometheus
 
     command:

@@ -1,37 +1,9 @@
-# Python
+.env
 venv/
 __pycache__/
 *.pyc
-
-# Runtime/logs
-*.log
 logs/
-.env
-
-# Runtime data / generated data
-qdrant/
-ollama/
-openwebui/
-wiki-raw/
-wiki-parsed/
 data/
-peka-data/
-
-# Customer data / large dumps
-*.tar
-*.tar.gz
-*.zip
-*.7z
-*.db
-*.sqlite
-*.sqlite3
-
-# Secrets
-id_ed25519
-id_ed25519.pub
-*.pem
-*.key
-
+monitoring/data/
 app.backup.*/
-logs/
-.env
+*.log

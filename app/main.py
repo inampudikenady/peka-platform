@@ -13,6 +13,10 @@ from app.config import (
 from app.routes.ask import router as ask_router
 from app.routes.openai_v1 import router as openai_v1_router
 from app.routes.ui import router as ui_router
+from app.routes.servicenow import router as servicenow_router
+from app.routes.monitoring import router as monitoring_router
+from app.routes.logs import router as logs_router
+from app.routes.ops import router as ops_router
 
 
 app = FastAPI(title=f"{APP_NAME} - {APP_FULL_NAME}")
@@ -20,6 +24,10 @@ app = FastAPI(title=f"{APP_NAME} - {APP_FULL_NAME}")
 app.include_router(ask_router)
 app.include_router(openai_v1_router)
 app.include_router(ui_router)
+app.include_router(servicenow_router)
+app.include_router(monitoring_router)
+app.include_router(logs_router)
+app.include_router(ops_router)
 
 
 @app.get("/")

@@ -5,6 +5,11 @@ from fastapi import APIRouter
 from app.config import APP_NAME
 from app.models import ChatCompletionRequest
 from app.rag_engine import run_peka_question
+from app.tools.context_builder import (
+    detect_intent,
+    enrich_question_with_operational_context,
+)
+
 
 router = APIRouter()
 
@@ -26,17 +31,9 @@ def list_models():
 
 @router.post("/v1/chat/completions")
 def chat_completions(req: ChatCompletionRequest):
-    """
-    OpenAI-compatible endpoint for Open WebUI integration.
-
-    Open WebUI may send:
-        "stream": true
-
-    PEKA currently ignores streaming requests and returns
-    a standard non-streamed response for compatibility.
-    """
-
-    user_messages = [m.content for m in req.messages if m.role == "user"]
+    user_messages = [
+        m.content for m in req.messages if m.role == "user"
+    ]
 
     if not user_messages:
         return {
@@ -47,16 +44,21 @@ def chat_completions(req: ChatCompletionRequest):
         }
 
     question = user_messages[-1]
+    intent = detect_intent(question)
 
-    answer, sources = run_peka_question(question)
+    enriched_question = enrich_question_with_operational_context(question)
 
-    if sources:
+    answer, sources = run_peka_question(enriched_question)
+
+    # Show wiki sources only when the question is documentation/procedure oriented.
+    if intent == "docs" and sources:
         source_text = "\n\nSources:\n" + "\n".join(
-            [f"- {src['file_name']}: {src['file_path']}" for src in sources]
+            [
+                f"- {src['file_name']}: {src['file_path']}"
+                for src in sources
+            ]
         )
-
         final_answer = answer + source_text
-
     else:
         final_answer = answer
 

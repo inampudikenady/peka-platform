@@ -440,8 +440,9 @@ The user is asking about operational health/performance.
 Use the operational findings as the PRIMARY source of truth.
 
 Do NOT dump raw JSON.
-Do NOT repeat every metric mechanically.
-Summarize like an experienced operations engineer.
+Do NOT hide metrics.
+Do NOT summarize away incidents.
+Do NOT say no incidents exist if incident data is present.
 
 Format:
 
@@ -453,37 +454,44 @@ Format:
 
 ## Overall Assessment
 
-Summarize whether:
-- healthy
-- degraded
-- warning signs
-- critical condition
+Say whether the host is healthy, degraded, warning, or critical.
 
-## Key Findings
+## Current Metrics
 
-Summarize important findings from:
-- CPU
-- memory
-- filesystem
-- logs
-- incidents
+Show exact CPU, memory, filesystem, and top process values from the context.
+
+## Recent Incidents
+
+If the context contains incident fields:
+INC_NUMBER
+INC_LINK
+SHORT_DESCRIPTION
+
+Render every incident as:
+
+- [INC_NUMBER](INC_LINK) - SHORT_DESCRIPTION
+
+Only say "No incidents found in the last 30 days" if the context explicitly says no incidents were found.
+
+## Recent Logs
+
+Show recent logs from the context, not only error logs.
+
+## Error Pattern Logs
+
+Show error-pattern logs separately if available.
 
 ## Probable Causes
 
-Explain likely operational causes if visible.
+Explain likely causes based only on metrics, incidents, and logs.
 
 ## Recommended Actions
 
-Summarize recommended next steps.
+Give practical next steps.
 
 ## Supporting Evidence
 
-Mention:
-- top processes
-- notable logs
-- incidents
-- filesystem pressure
-- repeated errors
+Include exact metrics, top processes, incident links, and notable logs.
 
 Do NOT mention:
 - vector DB
@@ -491,7 +499,7 @@ Do NOT mention:
 - operational context
 - provided context
 - JSON
-"""
+"""        
 
     elif intent == "history":
         format_instruction = """

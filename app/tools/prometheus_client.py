@@ -189,7 +189,8 @@ def get_linux_top_cpu_processes(instance: str, limit: int = 5):
 
 def get_linux_top_memory_processes(instance: str, limit: int = 5):
     query = (
-        f'topk({limit}, namedprocess_namegroup_memory_bytes{{instance="{instance}"}})'
+        f'topk({limit}, '
+        f'namedprocess_namegroup_memory_bytes{{instance="{instance}",memtype="resident"}})'
     )
 
     results = _vector_values(promql(query))

@@ -7,3 +7,19 @@ data/
 monitoring/data/
 app.backup.*/
 *.log
+
+# Local secrets
+.env
+*.env
+
+# Runtime / logs / backups
+logs/
+*.log
+__pycache__/
+*.pyc
+archive/
+app/tools/archive/
+README.md.old
+
+# Monitoring data
+monitoring/data/

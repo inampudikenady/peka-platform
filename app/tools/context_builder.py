@@ -1,4 +1,7 @@
-import re
+from app.tools.intent_detector import (
+    detect_intent,
+    extract_identifier,
+)
 
 from app.tools.servicenow_client import (
     get_ci_summary,
@@ -10,107 +13,6 @@ from app.tools.loki_client import query_logs
 
 
 CURRENT_QUESTION = ""
-
-
-def extract_identifier(question: str):
-    ip_match = re.search(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", question)
-
-    if ip_match:
-        return ip_match.group(0)
-
-    ci_match = re.search(
-        r"\bpeka-dev-[a-z0-9-]+-\d{3}\b",
-        question.lower()
-    )
-
-    if ci_match:
-        return ci_match.group(0)
-
-    return None
-
-
-def detect_intent(question: str):
-    q = question.lower()
-
-    doc_words = [
-        "patch",
-        "upgrade",
-        "install",
-        "installation",
-        "configure",
-        "configuration",
-        "procedure",
-        "steps",
-        "document",
-        "documentation",
-        "how do i",
-        "how to",
-        "runbook",
-        "guide",
-        "rhel",
-        "ubuntu",
-        "windows patch",
-        "change plan",
-    ]
-
-    health_words = [
-        "health",
-        "status",
-        "slow",
-        "cpu",
-        "memory",
-        "mem",
-        "disk",
-        "filesystem",
-        "process",
-        "utilization",
-        "usage",
-        "load",
-        "performance",
-        "operational issue",
-        "issue",
-        "problem",
-    ]
-
-    history_words = [
-        "incident",
-        "ticket",
-        "history",
-        "past",
-        "last 30",
-        "recent issue",
-    ]
-
-    log_words = [
-        "log",
-        "logs",
-        "error",
-        "errors",
-        "failed",
-        "failure",
-        "event",
-        "events",
-        "auth",
-        "authentication",
-        "sudo",
-        "security",
-        "last 24",
-    ]
-
-    if any(x in q for x in doc_words):
-        return "docs"
-
-    if any(x in q for x in health_words):
-        return "health"
-
-    if any(x in q for x in history_words):
-        return "history"
-
-    if any(x in q for x in log_words):
-        return "logs"
-
-    return "cmdb"
-
 
 def build_cmdb_context(identifier: str):
     data = get_ci_summary(identifier)

@@ -2,58 +2,14 @@ from app.tools.intent_detector import (
     detect_intent,
     extract_identifier,
 )
-
-from app.tools.servicenow_client import (
-    get_ci_summary,
-    resolve_ci,
-)
+from app.tools.context_cmdb import build_cmdb_context
+from app.tools.servicenow_client import resolve_ci
 
 from app.tools.operational_analysis import analyze_ci
 from app.tools.loki_client import query_logs
 
 
 CURRENT_QUESTION = ""
-
-def build_cmdb_context(identifier: str):
-    data = get_ci_summary(identifier)
-
-    if not data.get("found"):
-        return f"""
-===== ServiceNow CMDB Context =====
-
-CI not found in ServiceNow for:
-{identifier}
-"""
-
-    cmdb = data.get("cmdb_record", {})
-    incidents = data.get("incidents_last_30_days", [])
-
-    context = f"""
-===== ServiceNow CMDB Context =====
-
-CI_NAME: {cmdb.get("name")}
-CI_LINK: {cmdb.get("link")}
-IP_ADDRESS: {cmdb.get("ip_address")}
-CMDB_OS: {cmdb.get("os")}
-DESCRIPTION: {cmdb.get("short_description")}
-LOCATION: {cmdb.get("location")}
-"""
-
-    if incidents:
-        context += "\n===== Related Incidents Last 30 Days =====\n"
-
-        for inc in incidents:
-            context += f"""
-INC_NUMBER: {inc.get("number")}
-INC_LINK: {inc.get("link")}
-SHORT_DESCRIPTION: {inc.get("short_description")}
-"""
-
-    else:
-        context += "\nNO_INCIDENTS_FOUND: true\n"
-
-    return context
-
 
 def build_health_context(identifier: str):
     analysis = analyze_ci(identifier=identifier, hours=24)

@@ -144,6 +144,27 @@ def get_linux_memory_bytes(instance: str):
         "used_percent": (used / total) * 100 if total else None,
     }
 
+def get_linux_uptime_seconds(instance: str):
+    query = (
+        f'node_time_seconds{{instance="{instance}"}} '
+        f'- node_boot_time_seconds{{instance="{instance}"}}'
+    )
+
+    return _first_value(promql(query))
+
+
+def get_linux_load_average(instance: str):
+    return {
+        "load1": _first_value(
+            promql(f'node_load1{{instance="{instance}"}}')
+        ),
+        "load5": _first_value(
+            promql(f'node_load5{{instance="{instance}"}}')
+        ),
+        "load15": _first_value(
+            promql(f'node_load15{{instance="{instance}"}}')
+        ),
+    }
 
 def get_linux_filesystems(instance: str):
     query = (
@@ -224,6 +245,8 @@ def get_linux_host_summary(host_ip: str) -> dict:
 
     process_status = get_target_status(process_instance)
     memory = get_linux_memory_bytes(node_instance)
+    uptime_seconds = get_linux_uptime_seconds(node_instance)
+    load_average = get_linux_load_average(node_instance)
 
     return {
         "host_ip": host_ip,
@@ -232,6 +255,12 @@ def get_linux_host_summary(host_ip: str) -> dict:
         "node_exporter": node_status,
         "process_exporter": process_status,
         "cpu_percent": round(get_linux_cpu_percent(node_instance) or 0, 2),
+        "uptime": {
+            "seconds": round(uptime_seconds or 0),
+            "hours": round((uptime_seconds or 0) / 3600, 2),
+            "days": round((uptime_seconds or 0) / 86400, 2),
+        },
+        "load_average": load_average,
         "memory": {
             "total_gb": bytes_to_gb(memory["total_bytes"]) if memory else None,
             "used_gb": bytes_to_gb(memory["used_bytes"]) if memory else None,

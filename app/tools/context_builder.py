@@ -1,262 +1,33 @@
+"""
+context_builder.py
+
+Purpose:
+    Orchestrate PEKA operational context enrichment.
+
+Flow:
+    1. Detect user intent
+    2. Extract CI hostname or IP address
+    3. Route to the correct context builder:
+       - CMDB / incident history
+       - health / metrics / logs
+       - logs
+       - docs with live context
+    4. Build a final enriched prompt for the RAG engine
+
+This module should stay light.
+ServiceNow, Prometheus, and Loki logic belongs in dedicated modules.
+"""
+
 from app.tools.intent_detector import (
     detect_intent,
     extract_identifier,
 )
+
 from app.tools.context_cmdb import build_cmdb_context
-from app.tools.servicenow_client import resolve_ci
-
-from app.tools.operational_analysis import analyze_ci
-from app.tools.loki_client import query_logs
-
+from app.tools.context_health import build_health_context
+from app.tools.context_logs import build_logs_context
 
 CURRENT_QUESTION = ""
-
-def build_health_context(identifier: str):
-    analysis = analyze_ci(identifier=identifier, hours=24)
-
-    if not analysis.get("found"):
-        return f"""
-===== Operational Analysis =====
-
-CI not found for:
-{identifier}
-
-SUMMARY:
-{analysis.get("summary")}
-
-FINDINGS:
-{analysis.get("findings")}
-"""
-
-    ci = analysis.get("ci", {})
-    monitoring = analysis.get("monitoring", {}) or {}
-    logs = analysis.get("logs", {}) or {}
-    findings = analysis.get("findings", [])
-
-    observed_os = monitoring.get("observed_os") or {}
-
-    os_display = (
-        observed_os.get("pretty_name")
-        or observed_os.get("product")
-        or ci.get("os")
-        or "Unknown"
-    )
-
-    memory = monitoring.get("memory", {}) or {}
-
-    filesystem_text = ""
-
-    for fs in monitoring.get("filesystems", []) or []:
-        filesystem_text += (
-            f"- {fs.get('mountpoint')} used "
-            f"{round(fs.get('used_percent', 0), 2)}%\n"
-        )
-
-    if not filesystem_text:
-        filesystem_text = "No filesystem metrics available.\n"
-
-    top_cpu_text = ""
-
-    for proc in monitoring.get("top_cpu_processes", []) or []:
-        top_cpu_text += (
-            f"- {proc.get('process')} approx "
-            f"{round(proc.get('cpu_percent_estimate', 0), 2)}%\n"
-        )
-
-    if not top_cpu_text:
-        top_cpu_text = "No process CPU metrics available.\n"
-
-    top_mem_text = ""
-
-    for proc in monitoring.get("top_memory_processes", []) or []:
-        mem_gb = round(
-            (proc.get("memory_bytes", 0) or 0)
-            / 1024 / 1024 / 1024,
-            2
-        )
-
-        top_mem_text += (
-            f"- {proc.get('process')} approx {mem_gb} GB\n"
-        )
-
-    if not top_mem_text:
-        top_mem_text = "No process memory metrics available.\n"
-
-    findings_text = ""
-
-    for finding in findings:
-        findings_text += f"""
-SEVERITY: {finding.get("severity")}
-FINDING: {finding.get("finding")}
-EVIDENCE: {finding.get("evidence")}
-RECOMMENDATION: {finding.get("recommendation")}
-"""
-
-    sample_logs_text = ""
-
-    for log in logs.get("sample_errors", [])[:5]:
-        normalized = log.get("normalized", {}) or {}
-
-        if normalized.get("type") == "windows_event":
-            sample_logs_text += f"""
-EVENT_SOURCE: {normalized.get("source")}
-EVENT_ID: {normalized.get("event_id")}
-LEVEL: {normalized.get("level")}
-MESSAGE: {normalized.get("message")}
-"""
-
-        else:
-            sample_logs_text += f"""
-LOG_LINE:
-{log.get("line")}
-"""
-
-    if not sample_logs_text:
-        sample_logs_text = "No sample error logs found.\n"
-
-    return f"""
-===== Operational Analysis =====
-
-CI_NAME: {ci.get("name")}
-CI_LINK: {ci.get("link")}
-IP_ADDRESS: {ci.get("ip_address")}
-OS: {os_display}
-DESCRIPTION: {ci.get("short_description")}
-
-OVERALL_SEVERITY: {analysis.get("overall_severity")}
-SUMMARY: {analysis.get("summary")}
-
-===== Monitoring Snapshot =====
-
-NODE_STATUS: {monitoring.get("status")}
-CPU_PERCENT: {monitoring.get("cpu_percent")}
-
-MEMORY_TOTAL_GB: {memory.get("total_gb")}
-MEMORY_USED_GB: {memory.get("used_gb")}
-MEMORY_AVAILABLE_GB: {memory.get("available_gb")}
-MEMORY_USED_PERCENT: {memory.get("used_percent")}
-
-FILESYSTEMS:
-{filesystem_text}
-
-TOP_CPU_PROCESSES:
-{top_cpu_text}
-
-TOP_MEMORY_PROCESSES:
-{top_mem_text}
-
-===== Operational Findings =====
-
-{findings_text}
-
-===== Sample Error Logs =====
-
-{sample_logs_text}
-"""
-
-
-def extract_log_search(question: str, identifier: str):
-    q = question.strip()
-    q_lower = q.lower()
-
-    if "error" in q_lower or "errors" in q_lower:
-        return "error"
-
-    if "failed" in q_lower or "failure" in q_lower:
-        return "fail"
-
-    if "auth" in q_lower or "authentication" in q_lower:
-        return "auth"
-
-    if "sudo" in q_lower:
-        return "sudo"
-
-    marker = "search logs for "
-
-    if marker in q_lower:
-        start = q_lower.find(marker) + len(marker)
-        phrase = q[start:]
-
-        stop_words = [
-            f" on {identifier.lower()}",
-            f" from {identifier.lower()}",
-        ]
-
-        for stop_word in stop_words:
-            idx = phrase.lower().find(stop_word)
-
-            if idx != -1:
-                phrase = phrase[:idx]
-
-        return phrase.strip()
-
-    return ""
-
-
-def build_logs_context(identifier: str):
-    resolved = resolve_ci(identifier)
-
-    if resolved.get("found"):
-        ci = resolved.get("cmdb_record", {})
-        host = ci.get("name")
-
-    else:
-        ci = {
-            "name": identifier,
-            "link": "",
-            "ip_address": "",
-        }
-
-        host = identifier
-
-    search = extract_log_search(CURRENT_QUESTION, identifier)
-
-    logs = query_logs(
-        host=host,
-        search=search,
-        hours=24,
-        limit=20,
-    )
-
-    sample_logs_text = ""
-
-    for log in logs.get("logs", [])[:10]:
-        normalized = log.get("normalized", {}) or {}
-
-        if normalized.get("type") == "windows_event":
-            sample_logs_text += f"""
-EVENT_SOURCE: {normalized.get("source")}
-EVENT_ID: {normalized.get("event_id")}
-LEVEL: {normalized.get("level")}
-USER: {normalized.get("user")}
-MESSAGE: {normalized.get("message")}
-"""
-
-        else:
-            sample_logs_text += f"""
-LOG_FILE: {log.get("filename")}
-LOG_LINE: {log.get("line")}
-"""
-
-    if not sample_logs_text:
-        sample_logs_text = (
-            "No matching logs found in the last 24 hours.\n"
-        )
-
-    return f"""
-===== Logs Context =====
-
-CI_NAME: {ci.get("name")}
-CI_LINK: {ci.get("link")}
-IP_ADDRESS: {ci.get("ip_address")}
-
-LOG_SEARCH: {search}
-LOG_COUNT_LAST_24H: {logs.get("count")}
-
-SAMPLE_LOGS:
-{sample_logs_text}
-"""
-
 
 def build_operational_context(question: str):
     global CURRENT_QUESTION
@@ -277,8 +48,8 @@ def build_operational_context(question: str):
         return build_cmdb_context(identifier), intent
 
     if intent == "logs":
-        return build_logs_context(identifier), intent
-
+        return build_logs_context(identifier, question), intent
+    
     if intent == "docs":
         return build_health_context(identifier), intent
 
@@ -293,108 +64,125 @@ def enrich_question_with_operational_context(question: str):
 
     if intent == "health":
         format_instruction = """
-The user is asking about operational health/performance.
+The user is asking about server health or performance.
 
-Use the operational findings as the PRIMARY source of truth.
+Use the context as evidence only.
 
-Do NOT dump raw JSON.
-Do NOT hide metrics.
-Do NOT summarize away incidents.
-Do NOT say no incidents exist if incident data is present.
+Do not perform advanced correlation yet.
+Do not claim an incident was caused by a metric.
+Do not claim a log caused an incident.
+Do not claim a change caused an incident.
+Do not invent root cause.
 
-Format:
+Format exactly like this:
 
-# Operational Health Summary - CI_NAME
+# Server Health Check - CI_NAME
 
-**CI:** [CI_NAME](CI_LINK)
-**IP Address:** IP_ADDRESS
-**OS:** OS
+## 1. CI Details
 
-## Overall Assessment
+Show:
+- CI link
+- IP address
+- OS
+- description
 
-Say whether the host is healthy, degraded, warning, or critical.
+## 2. Host Status
 
-## Current Metrics
+Show exact values if present:
+- uptime hours
+- uptime days
+- load average 1m
+- load average 5m
+- load average 15m
 
-Show exact CPU, memory, filesystem, and top process values from the context.
+## 3. Current Metrics
 
-## Recent Incidents
+Show exact values from the Metrics Snapshot:
+- node status
+- CPU percent
+- memory total, used, available, and used percent
+- filesystems
+- top CPU processes
+- top memory processes
 
-If the context contains incident fields:
-INC_NUMBER
-INC_LINK
-SHORT_DESCRIPTION
+## 4. Logs - Last 2 Hours
 
-Render every incident as:
+Use only the Logs Last 2 Hours section.
 
-- [INC_NUMBER](INC_LINK) - SHORT_DESCRIPTION
+Do not dump large raw logs.
+If repeated errors are shown, keep them grouped.
+Ignore informational/debug logs.
+If no actionable logs are present, say so.
 
-Only say "No incidents found in the last 30 days" if the context explicitly says no incidents were found.
+## 5. Incidents - Last 30 Days
 
-## Recent Logs
+Rules:
+- If HAS_INCIDENTS is true, copy every INCIDENT_MARKDOWN line exactly.
+- If HAS_INCIDENTS is false, write exactly: No incidents were found in the last 30 days.
+- Never create a heading called "## 5" without the full title.
+- Do not interpret incidents.
+- Do not summarize incidents.
+- Do not infer impact from incidents.
+- Do not output placeholder text.
+- Do not remove incident hyperlinks.
 
-Show recent logs from the context, not only error logs.
+## Summary
 
-## Error Pattern Logs
+Write exactly 3 short bullet points:
 
-Show error-pattern logs separately if available.
+- Current state: include NODE_STATUS, UPTIME_HOURS, CPU_PERCENT, MEMORY_USED_PERCENT, and load average.
+- Logs: state whether Logs Last 2 Hours has actionable errors.
+- Incidents: if HAS_INCIDENTS is true, write exactly "Incident history exists in the last 30 days. See section 5." If HAS_INCIDENTS is false, write exactly "No incidents were found in the last 30 days."
 
-## Probable Causes
+Do not write any summary sentence outside these 3 bullets.
+Do not infer impact from incidents.
+Do not correlate incidents with metrics or logs.
 
-Explain likely causes based only on metrics, incidents, and logs.
-
-## Recommended Actions
-
-Give practical next steps.
-
-## Supporting Evidence
-
-Include exact metrics, top processes, incident links, and notable logs.
-
-Do NOT mention:
-- vector DB
+Do not mention:
 - RAG
+- vector DB
 - operational context
 - provided context
 - JSON
-"""        
+"""
 
     elif intent == "history":
         format_instruction = """
-Format the response like this:
+The user is asking about incident or ticket history.
+
+Format exactly like this:
 
 # Incident History - CI_NAME
 
 **CI:** [CI_NAME](CI_LINK)
 **IP Address:** IP_ADDRESS
 
-## Related incidents in the last 30 days
+## Related Incidents - Last 30 Days
 
-- [INC_NUMBER](INC_LINK) - SHORT_DESCRIPTION
+If INCIDENT_MARKDOWN exists, copy every INCIDENT_MARKDOWN line exactly.
 
-If no incidents exist, say:
-No incidents found in the last 30 days.
+Only say "No incidents found in the last 30 days" when NO_INCIDENTS_FOUND is explicitly present.
 
-Always render CI and incidents as markdown hyperlinks.
+Do not rewrite CI_NAME.
+Do not rewrite incident numbers.
+Do not remove incident hyperlinks.
+Do not output placeholder text.
 """
 
     elif intent == "logs":
         format_instruction = """
-The user is asking about logs/errors/events.
+The user is asking about logs, errors, or events.
 
-Format:
+Format exactly like this:
 
 # Log Review - CI_NAME
 
 **CI:** [CI_NAME](CI_LINK)
 **IP Address:** IP_ADDRESS
 
-## Error/Event Summary
+## Log Search
 
-Summarize:
-- how many logs/events were found
-- whether they appear actionable
-- whether they appear informational/noisy
+Show LOG_SEARCH and LOG_COUNT_LAST_2H.
 
 ## Notable Log Entries
 
@@ -406,17 +194,13 @@ For Windows events include:
 - level
 - message
 
-Always render CI as a markdown hyperlink.
-
-Do NOT:
-- dump raw JSON
-- mention vector DB
-- mention operational context
+Do not dump raw JSON.
+Do not mention vector DB or RAG.
 """
 
     elif intent == "docs":
         format_instruction = """
-The user is asking for an operational action/procedure involving this CI.
+The user is asking for an operational action or procedure involving this CI.
 
 Use live CI/monitoring context to identify:
 - current host
@@ -448,12 +232,14 @@ Summarize useful procedure steps from retrieved documents.
 
 List document sources if provided by retrieval.
 
-Always render CI as a markdown hyperlink.
+Do not mention vector DB or RAG.
 """
 
     else:
         format_instruction = """
-Format the response like this:
+The user is asking for a CI overview.
+
+Format exactly like this:
 
 # CI Overview - CI_NAME
 
@@ -462,14 +248,16 @@ Format the response like this:
 **IP Address:** IP_ADDRESS
 **Description:** DESCRIPTION
 
-## Related incidents in the last 30 days
+## Related Incidents - Last 30 Days
 
-- [INC_NUMBER](INC_LINK) - SHORT_DESCRIPTION
+If INCIDENT_MARKDOWN exists, copy every INCIDENT_MARKDOWN line exactly.
 
-If no incidents exist, say:
-No incidents found in the last 30 days.
+Only say "No incidents found in the last 30 days" when NO_INCIDENTS_FOUND is explicitly present.
 
-Always render CI and incidents as markdown hyperlinks.
+Do not rewrite CI_NAME.
+Do not rewrite incident numbers.
+Do not remove incident hyperlinks.
+Do not output placeholder text.
 """
 
     return f"""
@@ -477,7 +265,7 @@ The user asked:
 
 {question}
 
-Use the following live operational context as authoritative.
+Use the following live operational context as authoritative evidence.
 
 Do not mention:
 - RAG
@@ -488,7 +276,7 @@ Do not mention:
 
 Do not dump raw fields.
 
-Answer based on user intent.
+Answer based on the user intent and the format instructions.
 
 Operational context:
 

@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 
 from app.config import (
@@ -17,6 +19,21 @@ from app.routes.servicenow import router as servicenow_router
 from app.routes.monitoring import router as monitoring_router
 from app.routes.logs import router as logs_router
 from app.routes.ops import router as ops_router
+
+
+def print_startup_banner():
+    print("\n====================================")
+    print("PEKA Startup")
+    print("====================================")
+    print(f"Customer Profile : {os.getenv('CUSTOMER_PROFILE', 'unknown')}")
+    print(f"Ticket Provider  : {os.getenv('TICKET_PROVIDER', 'unknown')}")
+    print(f"CMDB Provider    : {os.getenv('CMDB_PROVIDER', 'unknown')}")
+    print(f"Monitoring       : {os.getenv('MONITORING_PROVIDER', 'unknown')}")
+    print(f"Logs             : {os.getenv('LOG_PROVIDER', 'unknown')}")
+    print("====================================\n")
+
+
+print_startup_banner()
 
 
 app = FastAPI(title=f"{APP_NAME} - {APP_FULL_NAME}")
@@ -40,6 +57,11 @@ def root():
         "model": LLM_MODEL,
         "embedding_model": EMBED_MODEL_NAME,
         "retrieval": f"top{RETRIEVAL_TOP_K}_rerank_to_top{FINAL_TOP_K}_compressed",
+        "customer_profile": os.getenv("CUSTOMER_PROFILE", "unknown"),
+        "ticket_provider": os.getenv("TICKET_PROVIDER", "unknown"),
+        "cmdb_provider": os.getenv("CMDB_PROVIDER", "unknown"),
+        "monitoring_provider": os.getenv("MONITORING_PROVIDER", "unknown"),
+        "log_provider": os.getenv("LOG_PROVIDER", "unknown"),
         "ui": "/ui",
         "openai_compatible_base_url": "/v1",
     }
@@ -47,4 +69,11 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {
+        "status": "healthy",
+        "customer_profile": os.getenv("CUSTOMER_PROFILE", "unknown"),
+        "ticket_provider": os.getenv("TICKET_PROVIDER", "unknown"),
+        "cmdb_provider": os.getenv("CMDB_PROVIDER", "unknown"),
+        "monitoring_provider": os.getenv("MONITORING_PROVIDER", "unknown"),
+        "log_provider": os.getenv("LOG_PROVIDER", "unknown"),
+    }

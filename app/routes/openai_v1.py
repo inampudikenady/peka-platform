@@ -6,7 +6,7 @@ from app.config import APP_NAME
 from app.models import ChatCompletionRequest
 from app.rag_engine import run_peka_question
 from app.correlation.context_builder import enrich_question_with_operational_context
-from app.routing.intent_detector import detect_intent
+from app.routing.source_router import route_sources
 
 
 router = APIRouter()
@@ -42,14 +42,20 @@ def chat_completions(req: ChatCompletionRequest):
         }
 
     question = user_messages[-1]
-    intent = detect_intent(question)
+    route = route_sources(question)
+    sources_enabled = route["sources"]
 
     enriched_question = enrich_question_with_operational_context(question)
 
-    answer, sources = run_peka_question(enriched_question)
+    skip_retrieval = not sources_enabled.get("docs")
+
+    answer, sources = run_peka_question(
+        enriched_question,
+        skip_retrieval=skip_retrieval,
+    )
 
     # Show wiki sources only when the question is documentation/procedure oriented.
-    if intent == "docs" and sources:
+    if sources_enabled.get("docs") and sources:
         source_text = "\n\nSources:\n" + "\n".join(
             [
                 f"- {src['file_name']}: {src['file_path']}"

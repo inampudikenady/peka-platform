@@ -3,7 +3,7 @@ from fastapi import APIRouter
 from app.models import AskRequest, AskResponse
 from app.rag_engine import run_peka_question
 from app.correlation.context_builder import enrich_question_with_operational_context
-from app.routing.intent_detector import detect_intent, extract_identifier
+from app.routing.source_router import route_sources
 
 
 router = APIRouter()
@@ -11,27 +11,23 @@ router = APIRouter()
 
 @router.post("/ask", response_model=AskResponse)
 def ask(req: AskRequest):
-    intent = detect_intent(req.question)
-    identifier = extract_identifier(req.question)
+    route = route_sources(req.question)
+    intent = route["intent"]
+    sources = route["sources"]
 
     enriched_question = enrich_question_with_operational_context(req.question)
 
-    if identifier and intent in ["health", "logs", "history", "cmdb"]:
-        answer, _sources = run_peka_question(
-            enriched_question,
-            skip_retrieval=True,
-        )
+    # Operational questions already have enriched source context.
+    # Do not retrieve documents unless docs are explicitly needed.
+    skip_retrieval = not sources.get("docs")
 
-        return {
-            "question": req.question,
-            "answer": answer,
-            "sources": [],
-        }
-
-    answer, sources = run_peka_question(enriched_question)
+    answer, rag_sources = run_peka_question(
+        enriched_question,
+        skip_retrieval=skip_retrieval,
+    )
 
     return {
         "question": req.question,
         "answer": answer,
-        "sources": sources,
+        "sources": rag_sources if sources.get("docs") else [],
     }

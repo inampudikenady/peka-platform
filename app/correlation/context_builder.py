@@ -255,29 +255,30 @@ Do not mention vector DB or RAG.
 
     else:
         format_instruction = """
-The user is asking for a CI overview.
+The user is asking for a CI inventory overview.
+
+Use only inventory fields from the operational context.
+Do not include tickets.
+Do not include logs.
+Do not include metrics.
+Do not invent missing values.
 
 Format exactly like this:
 
 # CI Overview - CI_NAME
 
 **CI:** [CI_NAME](CI_LINK)
-**OS:** OS
 **IP Address:** IP_ADDRESS
+**OS:** OS
+**Application:** APPLICATION
+**Owner:** OWNER
+**Environment:** ENVIRONMENT
+**Criticality:** CRITICALITY
+**Patch Group:** PATCH_GROUP
 **Description:** DESCRIPTION
 
-## Related Tickets - Last 30 Days
-
-If HAS_TICKETS is true, copy every TICKET_MARKDOWN line exactly.
-
-If HAS_TICKETS is false, say:
-No tickets were found in the last 30 days.
-
-Do not rewrite CI_NAME.
-Do not rewrite ticket numbers.
-Do not remove ticket hyperlinks.
-Do not output placeholder text.
-Do not infer impact from tickets.
+Only include fields that exist in the context.
+If CI_LINK is empty, show CI_NAME as plain text, not a broken markdown link.
 """
 
     return f"""

@@ -19,6 +19,9 @@ from app.routes.servicenow import router as servicenow_router
 from app.routes.monitoring import router as monitoring_router
 from app.routes.logs import router as logs_router
 from app.routes.ops import router as ops_router
+from app.routes.cmdb import router as cmdb_router
+
+
 
 
 def print_startup_banner():
@@ -45,6 +48,7 @@ app.include_router(servicenow_router)
 app.include_router(monitoring_router)
 app.include_router(logs_router)
 app.include_router(ops_router)
+app.include_router(cmdb_router)
 
 
 @app.get("/")

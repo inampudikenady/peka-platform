@@ -8,14 +8,15 @@ Flow:
     1. Detect user intent
     2. Extract CI hostname or IP address
     3. Route to the correct context builder:
-       - CMDB / incident history
-       - health / metrics / logs
+       - inventory / CI details
+       - ticket history
+       - health / metrics / logs / tickets
        - logs
        - docs with live context
     4. Build a final enriched prompt for the RAG engine
 
 This module should stay light.
-ServiceNow, Prometheus, and Loki logic belongs in dedicated modules.
+Provider-specific logic belongs in dedicated modules.
 """
 
 from app.tools.intent_detector import (
@@ -23,11 +24,14 @@ from app.tools.intent_detector import (
     extract_identifier,
 )
 
-from app.tools.context_cmdb import build_cmdb_context
 from app.tools.context_health import build_health_context
+from app.tools.context_inventory import build_inventory_context
 from app.tools.context_logs import build_logs_context
+from app.tools.context_tickets import build_ticket_context
+
 
 CURRENT_QUESTION = ""
+
 
 def build_operational_context(question: str):
     global CURRENT_QUESTION
@@ -45,15 +49,25 @@ def build_operational_context(question: str):
         return build_health_context(identifier), intent
 
     if intent == "history":
-        return build_cmdb_context(identifier), intent
+        context = f"""
+{build_inventory_context(identifier)}
+
+{build_ticket_context(identifier)}
+"""
+        return context, intent
 
     if intent == "logs":
         return build_logs_context(identifier, question), intent
-    
+
     if intent == "docs":
         return build_health_context(identifier), intent
 
-    return build_cmdb_context(identifier), intent
+    context = f"""
+{build_inventory_context(identifier)}
+
+{build_ticket_context(identifier)}
+"""
+    return context, intent
 
 
 def enrich_question_with_operational_context(question: str):
@@ -63,110 +77,116 @@ def enrich_question_with_operational_context(question: str):
         return question
 
     if intent == "health":
-        format_instruction = """
+     format_instruction = """
 The user is asking about server health or performance.
 
-Use the context as evidence only.
+Use only the operational context as evidence.
+Do not use document sources.
+Do not invent missing values.
+Do not perform correlation.
 
-Do not perform advanced correlation yet.
-Do not claim an incident was caused by a metric.
-Do not claim a log caused an incident.
-Do not claim a change caused an incident.
-Do not invent root cause.
+Return only the final answer. Do not repeat these instructions.
 
-Format exactly like this:
+Format:
 
 # Server Health Check - CI_NAME
 
 ## 1. CI Details
 
-Show:
-- CI link
-- IP address
-- OS
-- description
+- CI link: CI_LINK
+- IP address: IP_ADDRESS
+- OS: OS
+- Description: DESCRIPTION
 
-## 2. Host Status
+## 2. Runtime Status
 
-Show exact values if present:
-- uptime hours
-- uptime days
-- load average 1m
-- load average 5m
-- load average 15m
+For Docker/container mode include:
+- Node status: NODE_STATUS
+- Container state: CONTAINER_STATE
+- Container running: CONTAINER_RUNNING
+- Container status: CONTAINER_STATUS
+- Container ID: CONTAINER_ID
+
+For VM mode include:
+- Node status: NODE_STATUS
+- Uptime hours: UPTIME_HOURS
+- Uptime days: UPTIME_DAYS
+- Load average 1m: LOAD_AVERAGE_1M
+- Load average 5m: LOAD_AVERAGE_5M
+- Load average 15m: LOAD_AVERAGE_15M
+
+Only include fields that exist in the context.
 
 ## 3. Current Metrics
 
-Show exact values from the Metrics Snapshot:
-- node status
-- CPU percent
-- memory total, used, available, and used percent
-- filesystems
-- top CPU processes
-- top memory processes
+For Docker/container mode include:
+- CPU percent: CPU_PERCENT
+- Memory used MB: MEMORY_USED_MB
+- Memory working set MB: MEMORY_WORKING_SET_MB
+
+For VM mode include:
+- CPU percent: CPU_PERCENT
+- Memory total GB: MEMORY_TOTAL_GB
+- Memory used GB: MEMORY_USED_GB
+- Memory available GB: MEMORY_AVAILABLE_GB
+- Memory used percent: MEMORY_USED_PERCENT
+- Filesystems
+- Top CPU processes
+- Top memory processes
+
+Only include fields that exist in the context.
 
 ## 4. Logs - Last 2 Hours
 
-Use only the Logs Last 2 Hours section.
+Use the Logs Last 2 Hours section.
+If no actionable logs are present, say:
+No actionable error logs found in the last 2 hours.
 
-Do not dump large raw logs.
-If repeated errors are shown, keep them grouped.
-Ignore informational/debug logs.
-If no actionable logs are present, say so.
+## 5. Tickets - Last 30 Days
 
-## 5. Incidents - Last 30 Days
-
-Rules:
-- If HAS_INCIDENTS is true, copy every INCIDENT_MARKDOWN line exactly.
-- If HAS_INCIDENTS is false, write exactly: No incidents were found in the last 30 days.
-- Never create a heading called "## 5" without the full title.
-- Do not interpret incidents.
-- Do not summarize incidents.
-- Do not infer impact from incidents.
-- Do not output placeholder text.
-- Do not remove incident hyperlinks.
+If HAS_TICKETS is true, list every TICKET_MARKDOWN line.
+If HAS_TICKETS is false, say:
+No tickets were found in the last 30 days.
 
 ## Summary
 
-Write exactly 3 short bullet points:
-
-- Current state: include NODE_STATUS, UPTIME_HOURS, CPU_PERCENT, MEMORY_USED_PERCENT, and load average.
-- Logs: state whether Logs Last 2 Hours has actionable errors.
-- Incidents: if HAS_INCIDENTS is true, write exactly "Incident history exists in the last 30 days. See section 5." If HAS_INCIDENTS is false, write exactly "No incidents were found in the last 30 days."
-
-Do not write any summary sentence outside these 3 bullets.
-Do not infer impact from incidents.
-Do not correlate incidents with metrics or logs.
+Write exactly 3 bullets:
+- Current state: summarize current status and metrics.
+- Logs: summarize log status.
+- Tickets: summarize ticket status.
 
 Do not mention:
 - RAG
 - vector DB
+- JSON
 - operational context
 - provided context
-- JSON
+- format instructions
 """
 
     elif intent == "history":
         format_instruction = """
-The user is asking about incident or ticket history.
+The user is asking about ticket or incident history.
 
 Format exactly like this:
 
-# Incident History - CI_NAME
+# Ticket History - CI_NAME
 
 **CI:** [CI_NAME](CI_LINK)
 **IP Address:** IP_ADDRESS
 
-## Related Incidents - Last 30 Days
+## Related Tickets - Last 30 Days
 
-If INCIDENT_MARKDOWN exists, copy every INCIDENT_MARKDOWN line exactly.
+If HAS_TICKETS is true, copy every TICKET_MARKDOWN line exactly.
 
-Only say "No incidents found in the last 30 days" when NO_INCIDENTS_FOUND is explicitly present.
+If HAS_TICKETS is false, say:
+No tickets were found in the last 30 days.
 
 Do not rewrite CI_NAME.
-Do not rewrite incident numbers.
-Do not remove incident hyperlinks.
+Do not rewrite ticket numbers.
+Do not remove ticket hyperlinks.
 Do not output placeholder text.
+Do not infer impact from tickets.
 """
 
     elif intent == "logs":
@@ -248,16 +268,18 @@ Format exactly like this:
 **IP Address:** IP_ADDRESS
 **Description:** DESCRIPTION
 
-## Related Incidents - Last 30 Days
+## Related Tickets - Last 30 Days
 
-If INCIDENT_MARKDOWN exists, copy every INCIDENT_MARKDOWN line exactly.
+If HAS_TICKETS is true, copy every TICKET_MARKDOWN line exactly.
 
-Only say "No incidents found in the last 30 days" when NO_INCIDENTS_FOUND is explicitly present.
+If HAS_TICKETS is false, say:
+No tickets were found in the last 30 days.
 
 Do not rewrite CI_NAME.
-Do not rewrite incident numbers.
-Do not remove incident hyperlinks.
+Do not rewrite ticket numbers.
+Do not remove ticket hyperlinks.
 Do not output placeholder text.
+Do not infer impact from tickets.
 """
 
     return f"""

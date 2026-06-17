@@ -1,0 +1,67 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: peka-local-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.8
+    container_name: peka-local-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yml:ro
+    command:
+      - "-config.file=/etc/loki/local-config.yml"
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.8
+    container_name: peka-local-promtail
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command:
+      - "-config.file=/etc/promtail/config.yml"
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: peka-local-cadvisor
+    ports:
+      - "8088:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    restart: unless-stopped
+
+  linux-demo-001:
+    image: ubuntu:22.04
+    container_name: linux-demo-001
+    command: >
+      sh -c "while true; do
+      echo \"$(date) linux-demo-001 app healthy\";
+      sleep 10;
+      done"
+    restart: unless-stopped
+
+  linux-demo-002:
+    image: ubuntu:22.04
+    container_name: linux-demo-002
+    command: >
+      sh -c "while true; do
+      echo \"$(date) linux-demo-002 error simulated login failure\";
+      sleep 30;
+      done"
+    restart: unless-stopped

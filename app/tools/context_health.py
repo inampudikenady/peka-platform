@@ -2,24 +2,29 @@
 context_health.py
 
 Purpose:
-    Build a simple operational health context for a CI.
+    Build a simple operational health context for a CI or container.
 
 Flow for health questions:
-    1. Get CI details and incidents from ServiceNow
-    2. Get metrics from Prometheus
-    3. Get logs from Loki for the last 2 hours
-    4. Reduce log noise by grouping repeated error lines
+    1. Get CI/inventory details
+    2. Get ticket context from selected ticket provider
+    3. Get metrics from selected monitoring provider
+       - prometheus: VM/node_exporter flow
+       - docker_prometheus: local Docker/cAdvisor flow
+    4. Get logs from Loki for the last 2 hours
+    5. Reduce log noise by grouping repeated error lines
 
 This module does not perform correlation yet.
-Correlation between alerts, incidents, logs, and changes is future roadmap.
+Correlation between alerts, tickets, logs, and changes is future roadmap.
 """
 
 from collections import Counter
+import os
 import re
 
-from app.routes import monitoring
+from app.tools.context_inventory import build_inventory_context
+from app.tools.context_tickets import build_ticket_context
 from app.tools.operational_analysis import analyze_ci
-from app.tools.context_cmdb import build_cmdb_context
+from app.tools.prometheus_docker_client import get_container_summary
 
 
 def _normalize_log_line(line: str) -> str:
@@ -38,7 +43,11 @@ def _normalize_log_line(line: str) -> str:
     normalized = re.sub(r":\d{2,5}\b", ":<port>", normalized)
     normalized = re.sub(r'"remote_port":"?\d+"?', '"remote_port":"<port>"', normalized)
     normalized = re.sub(r'"err_id":"[^"]+"', '"err_id":"<err_id>"', normalized)
-    normalized = re.sub(r'"Sec-Websocket-Key":\[[^\]]+\]', '"Sec-Websocket-Key":["<key>"]', normalized)
+    normalized = re.sub(
+        r'"Sec-Websocket-Key":\[[^\]]+\]',
+        '"Sec-Websocket-Key":["<key>"]',
+        normalized,
+    )
     normalized = re.sub(r"\d{10}(?:\.\d+)?", "<epoch>", normalized)
     normalized = re.sub(r"\s+", " ", normalized).strip()
 
@@ -107,28 +116,101 @@ def _build_deduped_log_summary(logs: dict, limit: int = 5) -> str:
     return output
 
 
-def build_health_context(identifier: str):
+def _build_docker_health_context(identifier: str) -> str:
     """
-    Build health context for a hostname or IP address.
-
-    Args:
-        identifier:
-            CI hostname or IP address extracted from the user's question.
-
-    Returns:
-        str:
-            Structured context containing CI details, metrics, logs,
-            and recent incidents.
+    Build health context for local Docker/cAdvisor demo workloads.
     """
-    cmdb_context = build_cmdb_context(identifier)
+    inventory_context = build_inventory_context(identifier)
+    ticket_context = build_ticket_context(identifier)
+    container = get_container_summary(identifier)
+
+    if not container.get("found"):
+        return f"""
+{inventory_context}
+
+{ticket_context}
+
+===== Operational Health Context =====
+
+MONITORING_PROVIDER: docker_prometheus
+
+Container not found in local Docker monitoring for:
+{identifier}
+
+NODE_STATUS: not_found
+"""
+
+    return f"""
+{inventory_context}
+
+{ticket_context}
+
+===== Operational Health Context =====
+
+MONITORING_PROVIDER: docker_prometheus
+
+CI_NAME: {container.get("name")}
+CI_LINK:
+IP_ADDRESS:
+OS: Docker Container
+DESCRIPTION: Local Docker demo workload
+
+===== Host Status =====
+
+NODE_STATUS: {container.get("status")}
+CONTAINER_STATE: {container.get("state")}
+CONTAINER_RUNNING: {container.get("running")}
+CONTAINER_STATUS: {container.get("status_text")}
+CONTAINER_ID: {container.get("container_id")}
+
+===== Metrics Snapshot =====
+
+NODE_STATUS: {container.get("status")}
+CPU_PERCENT: {container.get("cpu_percent")}
+
+MEMORY_USED_MB: {container.get("memory_mb")}
+MEMORY_WORKING_SET_MB: {container.get("memory_working_set_mb")}
+
+FILESYSTEMS:
+No filesystem metrics available for Docker container mode.
+
+TOP_CPU_PROCESSES:
+Process-level metrics are not enabled in Docker container mode.
+
+TOP_MEMORY_PROCESSES:
+Process-level metrics are not enabled in Docker container mode.
+
+===== Logs Last 2 Hours =====
+
+Use log review for container logs, or ask:
+Show error logs for {identifier}
+
+===== Health Flow Note =====
+
+This health check is evidence-only.
+Do not infer ticket/log/change correlation.
+Do not claim a ticket was caused by a log or metric.
+"""
+
+
+def _build_prometheus_vm_health_context(identifier: str) -> str:
+    """
+    Build health context for VM/node_exporter/process_exporter flow.
+    """
+    inventory_context = build_inventory_context(identifier)
+    ticket_context = build_ticket_context(identifier)
 
     analysis = analyze_ci(identifier=identifier, hours=2)
 
     if not analysis.get("found"):
         return f"""
-{cmdb_context}
+{inventory_context}
+
+{ticket_context}
 
 ===== Operational Health Context =====
+
+MONITORING_PROVIDER: prometheus
 
 CI not found in monitoring for:
 {identifier}
@@ -185,7 +267,7 @@ FINDINGS:
         mem_gb = round(
             (proc.get("memory_bytes", 0) or 0)
             / 1024 / 1024 / 1024,
-            2
+            2,
         )
 
         top_mem_text += (
@@ -198,9 +280,13 @@ FINDINGS:
     log_summary = _build_deduped_log_summary(logs, limit=5)
 
     return f"""
-{cmdb_context}
+{inventory_context}
+
+{ticket_context}
 
 ===== Operational Health Context =====
+
+MONITORING_PROVIDER: prometheus
 
 CI_NAME: {ci.get("name")}
 CI_LINK: {ci.get("link")}
@@ -243,6 +329,21 @@ TOP_MEMORY_PROCESSES:
 ===== Health Flow Note =====
 
 This health check is evidence-only.
-Do not infer incident/log/change correlation.
-Do not claim an incident was caused by a log or metric.
+Do not infer ticket/log/change correlation.
+Do not claim a ticket was caused by a log or metric.
 """
+
+
+def build_health_context(identifier: str):
+    """
+    Build health context for a hostname, IP address, or local container.
+    """
+    monitoring_provider = os.getenv(
+        "MONITORING_PROVIDER",
+        "prometheus",
+    ).lower()
+
+    if monitoring_provider == "docker_prometheus":
+        return _build_docker_health_context(identifier)
+
+    return _build_prometheus_vm_health_context(identifier)

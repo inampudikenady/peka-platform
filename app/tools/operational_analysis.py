@@ -1,6 +1,14 @@
+import os
+
+from dotenv import load_dotenv
+
 from app.tools.servicenow_client import resolve_ci, get_ci_summary
+from app.tools.cmdb_csv import get_ci
 from app.tools.prometheus_client import get_linux_host_summary
 from app.tools.loki_client import query_logs, query_errors
+from app.tools.prometheus_docker_client import get_container_summary
+
+load_dotenv()
 
 
 def _severity(level: str, finding: str, evidence: str, recommendation: str = ""):
@@ -12,81 +20,144 @@ def _severity(level: str, finding: str, evidence: str, recommendation: str = "")
     }
 
 
-def analyze_ci(identifier: str, hours: int = 24) -> dict:
+def _resolve_cmdb_ci(identifier: str) -> dict:
     """
-    Build structured operational analysis for a CI.
+    Resolve CI from the configured CMDB provider.
 
-    Inputs can be:
-    - hostname
-    - IP address
-
-    Sources:
-    - ServiceNow CMDB
-    - ServiceNow incidents
-    - Prometheus metrics
-    - Loki logs
+    CMDB_PROVIDER=csv        -> local tuple_cmdb.csv
+    CMDB_PROVIDER=servicenow -> ServiceNow CMDB
     """
+    cmdb_provider = os.getenv("CMDB_PROVIDER", "servicenow").lower()
 
-    findings = []
+    if cmdb_provider == "csv":
+        ci = get_ci(identifier)
+
+        if not ci:
+            return {
+                "found": False,
+                "provider": "csv",
+                "summary": "CI was not found in local CMDB.",
+                "finding": _severity(
+                    "warning",
+                    "CI not found",
+                    f"No local CMDB record found for {identifier}.",
+                    "Validate CI name/hostname/IP or update tuple_cmdb.csv.",
+                ),
+            }
+
+        return {
+            "found": True,
+            "provider": "csv",
+            "ci": ci,
+            "ci_name": ci.get("ci_name"),
+            "ip_address": ci.get("ip"),
+            "display_name": ci.get("ci_name"),
+            "description": ci.get("notes"),
+        }
 
     snow = get_ci_summary(identifier)
 
     if snow.get("found"):
-        ci = snow.get("cmdb_record", {})
+        ci = snow.get("cmdb_record", {}) or {}
     else:
         resolved = resolve_ci(identifier)
 
         if not resolved.get("found"):
             return {
-                "identifier": identifier,
                 "found": False,
+                "provider": "servicenow",
                 "summary": "CI was not found in ServiceNow CMDB.",
-                "findings": [
-                    _severity(
-                        "warning",
-                        "CI not found",
-                        f"No CMDB record found for {identifier}.",
-                        "Validate hostname/IP or populate CMDB.",
-                    )
-                ],
+                "finding": _severity(
+                    "warning",
+                    "CI not found",
+                    f"No ServiceNow CMDB record found for {identifier}.",
+                    "Validate hostname/IP or populate ServiceNow CMDB.",
+                ),
             }
 
-        ci = resolved["cmdb_record"]
+        ci = resolved.get("cmdb_record", {}) or {}
 
-    ci_name = ci.get("name")
-    ip_address = ci.get("ip_address")
+    return {
+        "found": True,
+        "provider": "servicenow",
+        "ci": ci,
+        "ci_name": ci.get("name"),
+        "ip_address": ci.get("ip_address"),
+        "display_name": ci.get("name"),
+        "description": ci.get("short_description"),
+    }
 
-    incident_candidates = []
 
-    for lookup in [identifier, ci_name, ip_address]:
-        if lookup and lookup not in incident_candidates:
-            incident_candidates.append(lookup)
+def analyze_ci(identifier: str, hours: int = 24) -> dict:
+    """
+    Build structured operational analysis for a CI.
+
+    Inputs can be:
+    - CI name
+    - hostname
+    - IP address
+
+    Sources:
+    - Configured CMDB provider:
+        - ServiceNow
+        - Local CSV
+    - Prometheus metrics
+    - Loki logs
+
+    Note:
+    Ticket context is handled separately in context_tickets.py.
+    """
+
+    findings = []
+
+    resolved_ci = _resolve_cmdb_ci(identifier)
+
+    if not resolved_ci.get("found"):
+        return {
+            "identifier": identifier,
+            "found": False,
+            "summary": resolved_ci.get("summary"),
+            "findings": [resolved_ci.get("finding")],
+        }
+
+    cmdb_provider = resolved_ci.get("provider")
+    ci = resolved_ci.get("ci", {}) or {}
+    ci_name = resolved_ci.get("ci_name")
+    ip_address = resolved_ci.get("ip_address")
+    description = resolved_ci.get("description")
 
     incidents = []
 
-    for lookup in incident_candidates:
-        snow_lookup = get_ci_summary(lookup)
-        incidents = snow_lookup.get("incidents_last_30_days", []) or []
+    if cmdb_provider == "servicenow":
+        incident_candidates = []
+
+        for lookup in [identifier, ci_name, ip_address]:
+            if lookup and lookup not in incident_candidates:
+                incident_candidates.append(lookup)
+
+        for lookup in incident_candidates:
+            snow_lookup = get_ci_summary(lookup)
+            incidents = snow_lookup.get("incidents_last_30_days", []) or []
+
+            if incidents:
+                break
 
         if incidents:
-            break
-
-    if incidents:
-        findings.append(
-            _severity(
-                "info",
-                "Recent incidents found",
-                f"{len(incidents)} incident(s) found in ServiceNow in the last 30 days.",
-                "Review linked incidents for recent operational history.",
+            findings.append(
+                _severity(
+                    "info",
+                    "Recent incidents found",
+                    f"{len(incidents)} incident(s) found in ServiceNow in the last 30 days.",
+                    "Review linked incidents for recent operational history.",
+                )
             )
-        )
 
     if not ip_address:
         findings.append(
             _severity(
                 "warning",
                 "Missing IP address in CMDB",
-                f"CI {ci_name} has no IP address in ServiceNow.",
+                f"CI {ci_name} has no IP address in {cmdb_provider}.",
                 "Update CMDB IP address so monitoring/log correlation can work.",
             )
         )
@@ -103,7 +174,12 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
             "summary": "CI found, but monitoring correlation cannot run because IP address is missing.",
         }
 
-    monitoring = get_linux_host_summary(ip_address)
+    monitoring_provider = os.getenv("MONITORING_PROVIDER", "prometheus").lower()
+
+    if monitoring_provider == "docker_prometheus":
+         monitoring = get_container_summary(ci_name)
+    else:
+         monitoring = get_linux_host_summary(ip_address)
 
     if monitoring.get("status") != "up":
         findings.append(
@@ -200,9 +276,6 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
                     )
                 )
 
-    # Do not only search for errors. Pull recent logs as well so CPU/memory
-    # congestion, cron activity, service restarts, auth, kernel, and app noise
-    # are still visible to the LLM/operator.
     recent_logs = query_logs(
         host=ci_name,
         search="",
@@ -273,7 +346,13 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
     return {
         "identifier": identifier,
         "found": True,
-        "ci": ci,
+        "cmdb_provider": cmdb_provider,
+        "ci": {
+            **ci,
+            "name": ci_name,
+            "ip_address": ip_address,
+            "short_description": description,
+        },
         "incidents_last_30_days": incidents,
         "monitoring": monitoring,
         "logs": {
@@ -287,4 +366,3 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
         "summary": summary,
         "findings": findings,
     }
-

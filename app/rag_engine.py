@@ -267,17 +267,20 @@ Relevant Content:
 
     return "\n\n---------------------\n\n".join(context_blocks)
 
+def run_peka_question(question: str, skip_retrieval: bool = False):
+    if skip_retrieval:
+        selected_nodes = []
+        context = ""
+    else:
+        raw_nodes = retriever.retrieve(question)
 
-def run_peka_question(question: str):
-    raw_nodes = retriever.retrieve(question)
+        selected_nodes = rerank_nodes(
+            question,
+            raw_nodes,
+            final_k=FINAL_TOP_K,
+        )
 
-    selected_nodes = rerank_nodes(
-        question,
-        raw_nodes,
-        final_k=FINAL_TOP_K,
-    )
-
-    context = build_context(question, selected_nodes)
+        context = build_context(question, selected_nodes)
 
     prompt = QA_PROMPT.format(
         dataset_name=DATASET_NAME,

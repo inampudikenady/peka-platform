@@ -3,13 +3,12 @@ context_cmdb.py
 
 Purpose:
     Retrieve Configuration Item (CI) information and related incidents
-    from ServiceNow and convert them into structured context that PEKA
-    can inject into the LLM prompt.
+    from the configured CMDB provider and convert them into structured
+    context that PEKA can inject into the LLM prompt.
 
-Responsibilities:
-    - Query ServiceNow CMDB
-    - Retrieve recent incidents for a CI
-    - Build structured context for RAG enrichment
+Supported Providers:
+    - ServiceNow
+    - Local CSV CMDB
 
 Used By:
     context_builder.py
@@ -24,15 +23,61 @@ Flow:
     build_cmdb_context()
          |
          v
-    ServiceNow CMDB + Incidents
+    CMDB Provider
          |
          v
     Structured Prompt Context
 """
+
+import os
+from dotenv import load_dotenv
+
 from app.tools.servicenow_client import get_ci_summary
+from app.tools.cmdb_csv import get_ci
+
+load_dotenv()
+
+CMDB_PROVIDER = os.getenv("CMDB_PROVIDER", "servicenow").lower()
 
 
 def build_cmdb_context(identifier: str):
+
+    if CMDB_PROVIDER == "csv":
+        return build_csv_cmdb_context(identifier)
+
+    return build_servicenow_cmdb_context(identifier)
+
+
+def build_csv_cmdb_context(identifier: str):
+
+    ci = get_ci(identifier)
+
+    if not ci:
+        return f"""
+===== Local CMDB Context =====
+
+CI not found in local CMDB for:
+{identifier}
+"""
+
+    return f"""
+===== Local CMDB Context =====
+
+CI_NAME: {ci.get("ci_name")}
+HOSTNAME: {ci.get("hostname")}
+IP_ADDRESS: {ci.get("ip")}
+APPLICATION: {ci.get("application")}
+OWNER: {ci.get("owner")}
+ENVIRONMENT: {ci.get("environment")}
+OS_TYPE: {ci.get("os_type")}
+CRITICALITY: {ci.get("criticality")}
+PATCH_GROUP: {ci.get("patch_group")}
+NOTES: {ci.get("notes")}
+"""
+
+
+def build_servicenow_cmdb_context(identifier: str):
+
     data = get_ci_summary(identifier)
 
     if not data.get("found"):

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
-from app.tools.loki_client import query_logs, query_errors
-from app.tools.servicenow_client import resolve_ci
+from app.sources.logs.loki_client import query_logs, query_errors
+from app.sources.servicenow.servicenow_client import resolve_ci
 
 
 router = APIRouter(prefix="/tools/logs", tags=["logs"])

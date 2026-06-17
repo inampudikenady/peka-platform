@@ -32,8 +32,8 @@ Flow:
 import os
 from dotenv import load_dotenv
 
-from app.tools.servicenow_client import get_ci_summary
-from app.tools.cmdb_csv import get_ci
+from app.sources.servicenow.servicenow_client import get_ci_summary
+from app.sources.cmdb.cmdb_csv import get_ci
 
 load_dotenv()
 

@@ -24,10 +24,10 @@ from app.routing.intent_detector import (
     extract_identifier,
 )
 
-from app.tools.context_health import build_health_context
-from app.tools.context_inventory import build_inventory_context
-from app.tools.context_logs import build_logs_context
-from app.tools.context_tickets import build_ticket_context
+from app.sources.metrics.context_health import build_health_context
+from app.sources.cmdb.context_inventory import build_inventory_context
+from app.sources.logs.context_logs import build_logs_context
+from app.sources.tickets.context_tickets import build_ticket_context
 
 
 CURRENT_QUESTION = ""

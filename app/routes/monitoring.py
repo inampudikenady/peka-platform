@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
-from app.tools.prometheus_client import get_linux_host_summary
-from app.tools.servicenow_client import resolve_ci
+from app.sources.metrics.prometheus_client import get_linux_host_summary
+from app.sources.servicenow.servicenow_client import resolve_ci
 
 
 router = APIRouter(prefix="/tools/monitoring", tags=["monitoring"])

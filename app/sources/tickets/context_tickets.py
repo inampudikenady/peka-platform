@@ -10,8 +10,8 @@ Supported:
 
 import os
 
-from app.tools.servicenow_client import get_ci_summary
-from app.tools.zammad_client import get_tickets_for_ci
+from app.sources.servicenow.servicenow_client import get_ci_summary
+from app.sources.tickets.zammad_client import get_tickets_for_ci
 from dotenv import load_dotenv
 
 load_dotenv()

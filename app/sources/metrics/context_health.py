@@ -21,10 +21,10 @@ from collections import Counter
 import os
 import re
 
-from app.tools.context_inventory import build_inventory_context
-from app.tools.context_tickets import build_ticket_context
+from app.sources.cmdb.context_inventory import build_inventory_context
+from app.sources.tickets.context_tickets import build_ticket_context
 from app.correlation.operational_analysis import analyze_ci
-from app.tools.prometheus_docker_client import get_container_summary
+from app.sources.metrics.prometheus_docker_client import get_container_summary
 
 
 def _normalize_log_line(line: str) -> str:

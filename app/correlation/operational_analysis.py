@@ -2,11 +2,11 @@ import os
 
 from dotenv import load_dotenv
 
-from app.tools.servicenow_client import resolve_ci, get_ci_summary
-from app.tools.cmdb_csv import get_ci
-from app.tools.prometheus_client import get_linux_host_summary
-from app.tools.loki_client import query_logs, query_errors
-from app.tools.prometheus_docker_client import get_container_summary
+from app.sources.servicenow.servicenow_client import resolve_ci, get_ci_summary
+from app.sources.cmdb.cmdb_csv import get_ci
+from app.sources.metrics.prometheus_client import get_linux_host_summary
+from app.sources.logs.loki_client import query_logs, query_errors
+from app.sources.metrics.prometheus_docker_client import get_container_summary
 
 load_dotenv()
 

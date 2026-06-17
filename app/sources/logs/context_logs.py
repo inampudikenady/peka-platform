@@ -14,8 +14,8 @@ Used By:
     context_builder.py
 """
 
-from app.tools.servicenow_client import resolve_ci
-from app.tools.loki_client import query_logs
+from app.sources.servicenow.servicenow_client import resolve_ci
+from app.sources.logs.loki_client import query_logs
 
 
 def extract_log_search(question: str, identifier: str):

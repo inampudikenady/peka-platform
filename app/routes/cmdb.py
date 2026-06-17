@@ -1,6 +1,6 @@
 # app/routes/cmdb.py
 from fastapi import APIRouter
-from app.tools.cmdb_csv import get_ci
+from app.sources.cmdb.cmdb_csv import get_ci
 
 router = APIRouter()
 

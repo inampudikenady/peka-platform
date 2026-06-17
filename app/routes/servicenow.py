@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from app.tools.servicenow_client import get_ci_summary
+from app.sources.servicenow.servicenow_client import get_ci_summary
 
 router = APIRouter(prefix="/tools/servicenow", tags=["servicenow"])
 

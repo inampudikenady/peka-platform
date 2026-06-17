@@ -195,16 +195,20 @@ Format exactly like this:
 
 # Log Review - CI_NAME
 
-**CI:** [CI_NAME](CI_LINK)
+**CI:** CI_NAME
 **IP Address:** IP_ADDRESS
 
 ## Log Search
 
-Show LOG_SEARCH and LOG_COUNT_LAST_2H.
+- Search term: LOG_SEARCH
+- Matches in last 2 hours: LOG_COUNT_LAST_2H
 
 ## Notable Log Entries
 
-Summarize important logs/events in readable operator language.
+If LOG_COUNT_LAST_2H is 0, say:
+No matching logs found in the last 2 hours.
+
+If logs exist, summarize important logs/events in readable operator language.
 
 For Windows events include:
 - source
@@ -212,6 +216,8 @@ For Windows events include:
 - level
 - message
 
+Do not show CI_LINK if it is empty.
+Do not show placeholder text.
 Do not dump raw JSON.
 Do not mention vector DB or RAG.
 """

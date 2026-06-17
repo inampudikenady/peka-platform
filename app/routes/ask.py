@@ -2,8 +2,8 @@ from fastapi import APIRouter
 
 from app.models import AskRequest, AskResponse
 from app.rag_engine import run_peka_question
-from app.tools.context_builder import enrich_question_with_operational_context
-from app.tools.intent_detector import detect_intent, extract_identifier
+from app.correlation.context_builder import enrich_question_with_operational_context
+from app.routing.intent_detector import detect_intent, extract_identifier
 
 
 router = APIRouter()

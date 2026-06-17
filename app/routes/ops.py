@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Query
 
-from app.tools.operational_analysis import analyze_ci
+from app.correlation.operational_analysis import analyze_ci
 
 
 router = APIRouter(prefix="/tools/ops", tags=["ops"])

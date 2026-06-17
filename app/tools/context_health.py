@@ -23,7 +23,7 @@ import re
 
 from app.tools.context_inventory import build_inventory_context
 from app.tools.context_tickets import build_ticket_context
-from app.tools.operational_analysis import analyze_ci
+from app.correlation.operational_analysis import analyze_ci
 from app.tools.prometheus_docker_client import get_container_summary
 
 

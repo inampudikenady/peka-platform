@@ -19,7 +19,7 @@ This module should stay light.
 Provider-specific logic belongs in dedicated modules.
 """
 
-from app.tools.intent_detector import (
+from app.routing.intent_detector import (
     detect_intent,
     extract_identifier,
 )

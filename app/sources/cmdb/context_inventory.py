@@ -15,24 +15,23 @@ load_dotenv()
 
 
 def build_inventory_context(identifier: str):
-    provider = os.getenv("CMDB_PROVIDER", "servicenow").lower()
-
-    if provider == "servicenow":
-        return build_servicenow_inventory_context(identifier)
+    provider = os.getenv("CMDB_PROVIDER", "auto").lower()
 
     if provider == "csv":
         return build_csv_inventory_context(identifier)
 
-    return f"""
-===== Inventory Context =====
+    if provider == "servicenow":
+        return build_servicenow_inventory_context(identifier)
 
-CI_NAME: {identifier}
-CI_LINK:
-IP_ADDRESS:
-OS:
-DESCRIPTION:
-INVENTORY_PROVIDER: {provider}
-"""
+    # Auto mode is best for demos:
+    # 1. Try local CSV CMDB first.
+    # 2. Fall back to ServiceNow if the CI is not in CSV.
+    csv_context = build_csv_inventory_context(identifier)
+
+    if "CI not found in local CMDB" not in csv_context:
+        return csv_context
+
+    return build_servicenow_inventory_context(identifier)
 
 
 def build_csv_inventory_context(identifier: str):

@@ -5,10 +5,8 @@ from fastapi import APIRouter
 from app.config import APP_NAME
 from app.models import ChatCompletionRequest
 from app.rag_engine import run_peka_question
-from app.correlation.context_builder import (
-    detect_intent,
-    enrich_question_with_operational_context,
-)
+from app.correlation.context_builder import enrich_question_with_operational_context
+from app.routing.intent_detector import detect_intent
 
 
 router = APIRouter()

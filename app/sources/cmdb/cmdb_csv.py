@@ -6,12 +6,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
 CMDB_FILE = Path(
     os.getenv(
         "PEKA_CMDB_FILE",
-        str(Path.home() / "Documents/Peka/data/cmdb/tuple_cmdb.csv"),
+        PROJECT_ROOT / "data/cmdb/tuple_cmdb.csv",
     )
-)
+).expanduser()
 
 
 def get_ci(ci_name: str):

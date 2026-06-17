@@ -19,10 +19,7 @@ This module should stay light.
 Provider-specific logic belongs in dedicated modules.
 """
 
-from app.routing.intent_detector import (
-    detect_intent,
-    extract_identifier,
-)
+from app.routing.source_router import route_sources
 
 from app.sources.metrics.context_health import build_health_context
 from app.sources.cmdb.context_inventory import build_inventory_context
@@ -38,35 +35,36 @@ def build_operational_context(question: str):
 
     CURRENT_QUESTION = question
 
-    identifier = extract_identifier(question)
+    route = route_sources(question)
+    intent = route["intent"]
+    identifier = route.get("identifier")
+    sources = route["sources"]
+
+    context_parts = []
+
+    # Docs-only and Azure-only questions do not need operational context here.
+    # Docs are handled by RAG retrieval.
+    # Azure will be handled by app/sources/azure later.
+    if sources.get("docs") or sources.get("azure"):
+        return "", intent
 
     if not identifier:
-        return "", "none"
+        return "", intent
 
-    intent = detect_intent(question)
+    if sources.get("cmdb"):
+        context_parts.append(build_inventory_context(identifier))
 
-    if intent == "health":
-        return build_health_context(identifier), intent
+    if sources.get("metrics"):
+        context_parts.append(build_health_context(identifier))
 
-    if intent == "history":
-        context = f"""
-{build_inventory_context(identifier)}
+    if sources.get("logs"):
+        context_parts.append(build_logs_context(identifier, question))
 
-{build_ticket_context(identifier)}
-"""
-        return context, intent
+    if sources.get("tickets"):
+        context_parts.append(build_ticket_context(identifier))
 
-    if intent == "logs":
-        return build_logs_context(identifier, question), intent
+    context = "\n\n".join(part for part in context_parts if part)
 
-    if intent == "docs":
-        return build_health_context(identifier), intent
-
-    context = f"""
-{build_inventory_context(identifier)}
-
-{build_ticket_context(identifier)}
-"""
     return context, intent
 
 
@@ -76,8 +74,8 @@ def enrich_question_with_operational_context(question: str):
     if not context:
         return question
 
-    if intent == "health":
-     format_instruction = """
+    if intent == "operational_health":
+        format_instruction = """
 The user is asking about server health or performance.
 
 Use only the operational context as evidence.
@@ -164,7 +162,7 @@ Do not mention:
 - format instructions
 """
 
-    elif intent == "history":
+    elif intent == "ticket_history":
         format_instruction = """
 The user is asking about ticket or incident history.
 

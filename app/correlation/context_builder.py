@@ -25,6 +25,7 @@ from app.sources.metrics.context_health import build_health_context
 from app.sources.cmdb.context_inventory import build_inventory_context
 from app.sources.logs.context_logs import build_logs_context
 from app.sources.tickets.context_tickets import build_ticket_context
+from app.sources.azure.context_azure import build_azure_context
 
 
 CURRENT_QUESTION = ""
@@ -45,8 +46,11 @@ def build_operational_context(question: str):
     # Docs-only and Azure-only questions do not need operational context here.
     # Docs are handled by RAG retrieval.
     # Azure will be handled by app/sources/azure later.
-    if sources.get("docs") or sources.get("azure"):
+    if sources.get("docs"):
         return "", intent
+
+    if sources.get("azure"):
+        return build_azure_context(question), intent
 
     if not identifier:
         return "", intent
@@ -288,7 +292,49 @@ No extra fields.
 If the value is missing, say:
 {label}: Not found
 """
+    elif intent == "cloud":
+        format_instruction = """
+The user is asking about Azure inventory or cloud resources.
 
+Use only the Azure Context as evidence.
+Do not invent costs.
+If cost data is not provided, clearly say cost is not available yet.
+
+Format:
+
+# Azure Summary
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+- Tenant ID: TENANT_ID
+- User: USER
+
+## Summary
+
+Summarize what was found.
+
+## Details
+
+If AZURE_QUERY_TYPE is resource_inventory:
+Group resources by type and list important resources.
+
+If AZURE_QUERY_TYPE is resource_groups:
+List resource groups with location and status.
+
+If AZURE_QUERY_TYPE is virtual_machines:
+List VMs with resource group, location, state, size, private IP, and public IP.
+
+If AZURE_ERROR is true:
+Show the Azure error message and action required.
+
+Do not mention:
+- RAG
+- vector DB
+- JSON
+- operational context
+"""
     else:
         format_instruction = """
 The user is asking for a CI inventory overview.

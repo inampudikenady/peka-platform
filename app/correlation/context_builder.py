@@ -259,6 +259,36 @@ List document sources if provided by retrieval.
 Do not mention vector DB or RAG.
 """
 
+    elif intent.startswith("inventory_field_"):
+        field_name = intent.replace("inventory_field_", "").upper()
+
+        label_map = {
+            "OWNER": "Owner",
+            "IP_ADDRESS": "IP Address",
+            "APPLICATION": "Application",
+            "CRITICALITY": "Criticality",
+            "ENVIRONMENT": "Environment",
+            "OS": "OS",
+            "PATCH_GROUP": "Patch Group",
+        }
+
+        label = label_map.get(field_name, field_name.replace("_", " ").title())
+
+        format_instruction = f"""
+The user is asking for one specific CI inventory field.
+
+Return exactly one line in this format:
+
+{label}: VALUE
+
+Use only the value from {field_name}.
+No heading.
+No explanation.
+No extra fields.
+If the value is missing, say:
+{label}: Not found
+"""
+
     else:
         format_instruction = """
 The user is asking for a CI inventory overview.

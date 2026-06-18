@@ -139,6 +139,51 @@ def route_sources(question: str) -> dict:
         route["sources"]["tickets"] = True
         return route
 
+    field_intents = {
+        "inventory_field_owner": [
+            "who owns",
+            "owner of",
+            "owned by",
+            "who is responsible",
+        ],
+        "inventory_field_ip_address": [
+            "ip address",
+            "what is the ip",
+            "which ip",
+        ],
+        "inventory_field_application": [
+            "what application",
+            "which application",
+            "application runs",
+            "app runs",
+        ],
+        "inventory_field_criticality": [
+            "criticality",
+            "how critical",
+            "priority",
+        ],
+        "inventory_field_environment": [
+            "environment",
+            "which env",
+            "what env",
+        ],
+        "inventory_field_os": [
+            "what os",
+            "which os",
+            "operating system",
+        ],
+        "inventory_field_patch_group": [
+            "patch group",
+            "patching group",
+        ],
+    }
+
+    for field_intent, words in field_intents.items():
+        if any(word in q for word in words):
+            route["intent"] = field_intent
+            route["sources"]["cmdb"] = True
+            return route
+
     route["intent"] = "inventory"
     route["sources"]["cmdb"] = True
     return route

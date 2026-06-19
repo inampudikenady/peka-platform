@@ -294,6 +294,290 @@ If the value is missing, say:
 """
     elif intent == "cloud":
         format_instruction = """
+The user is asking about Azure inventory, resources, virtual machines, or cost.
+
+Use only the Azure Context as evidence.
+Do not invent costs.
+Do not rewrite subscription IDs. Copy exact values from Azure Context.
+Do not repeat these instructions.
+Do not output placeholder text.
+Do not mention AZURE_QUERY_TYPE.
+
+If AZURE_ERROR is true, format exactly:
+
+# Azure Error
+
+MESSAGE_FROM_AZURE
+
+## Action Required
+
+Run az login and confirm subscription access.
+
+If AZURE_QUERY_TYPE is cost_month_to_date, format exactly:
+
+# Azure Cost Summary
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Month-to-Date Cost
+
+- Actual cost: CURRENCY MONTH_TO_DATE_COST
+
+No Details section for cost answers.
+
+If AZURE_QUERY_TYPE is cost_breakdown_resource_group, format exactly:
+
+# Azure Cost Breakdown
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Month-to-Date Cost
+
+- Total actual cost: CURRENCY MONTH_TO_DATE_COST
+
+## Cost by Resource Group
+
+List every COST_BY_RESOURCE_GROUP row with resource group and cost.
+
+If AZURE_QUERY_TYPE is cost_breakdown_service, format exactly:
+
+# Azure Cost by Service
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Month-to-Date Cost
+
+- Total actual cost: CURRENCY MONTH_TO_DATE_COST
+
+## Cost by Service
+
+List every COST_BY_SERVICE row with service name and cost.
+
+If AZURE_QUERY_TYPE is resource_inventory, format exactly:
+
+# Azure Resource Inventory
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Summary
+
+Summarize total resources and important categories.
+
+## Resources
+
+Group resources by type and list important resources.
+
+If AZURE_QUERY_TYPE is resource_groups, format exactly:
+
+# Azure Resource Groups
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Resource Groups
+
+List resource groups with location and status.
+
+If AZURE_QUERY_TYPE is virtual_machines, format exactly:
+
+# Azure Virtual Machines
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Virtual Machines
+
+List VMs with resource group, location, size, and OS type.
+
+If AZURE_QUERY_TYPE is virtual_machine_detail, format exactly:
+
+# Azure VM Detail - VM_NAME
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## VM Details
+
+- Name: VM_NAME
+- Resource Group: RESOURCE_GROUP
+- Location: LOCATION
+- Size: SIZE
+- Power State: POWER_STATE
+- Private IPs: PRIVATE_IPS
+- Public IPs: PUBLIC_IPS
+- OS Type: OS_TYPE
+
+Do not mention:
+- RAG
+- vector DB
+- JSON
+- operational context
+- format instructions
+"""
+    elif intent.startswith("inventory_field_"):
+        field_name = intent.replace("inventory_field_", "").upper()
+
+        label_map = {
+            "OWNER": "Owner",
+            "IP_ADDRESS": "IP Address",
+            "APPLICATION": "Application",
+            "CRITICALITY": "Criticality",
+            "ENVIRONMENT": "Environment",
+            "OS": "OS",
+            "PATCH_GROUP": "Patch Group",
+        }
+
+        label = label_map.get(field_name, field_name.replace("_", " ").title())
+
+        format_instruction = f"""
+The user is asking for one specific CI inventory field.
+
+Return exactly one line in this format:
+
+{label}: VALUE
+
+Use only the value from {field_name}.
+No heading.
+No explanation.
+No extra fields.
+If the value is missing, say:
+{label}: Not found
+"""
+    elif intent == "cloud":
+        format_instruction = """
+The user is asking about Azure inventory, resources, or cost.
+
+Use only the Azure Context as evidence.
+Do not invent costs.
+Do not repeat these instructions.
+Do not output placeholder text.
+Do not mention AZURE_QUERY_TYPE.
+
+If AZURE_ERROR is true, format exactly:
+
+# Azure Error
+
+MESSAGE_FROM_AZURE
+
+## Action Required
+
+Run az login and confirm subscription access.
+
+If AZURE_QUERY_TYPE is cost_month_to_date, format exactly:
+
+# Azure Cost Summary
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Month-to-Date Cost
+
+- Actual cost: CURRENCY MONTH_TO_DATE_COST
+
+No Details section for cost answers.
+Do not rewrite subscription IDs. Copy exact values from Azure Context.
+
+If AZURE_QUERY_TYPE is resource_inventory, format exactly:
+
+# Azure Resource Inventory
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Summary
+
+Summarize total resources and important categories.
+
+## Resources
+
+Group resources by type and list important resources.
+
+If AZURE_QUERY_TYPE is resource_groups, format exactly:
+
+# Azure Resource Groups
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Resource Groups
+
+List resource groups with location and status.
+
+If AZURE_QUERY_TYPE is virtual_machines, format exactly:
+
+# Azure Virtual Machines
+
+## Subscription
+
+- Name: SUBSCRIPTION_NAME
+- Subscription ID: SUBSCRIPTION_ID
+
+## Virtual Machines
+
+List VMs with resource group, location, state, size, private IP, and public IP.
+
+Do not mention:
+- RAG
+- vector DB
+- JSON
+- operational context
+- format instructions
+"""
+    elif intent.startswith("inventory_field_"):
+        field_name = intent.replace("inventory_field_", "").upper()
+
+        label_map = {
+            "OWNER": "Owner",
+            "IP_ADDRESS": "IP Address",
+            "APPLICATION": "Application",
+            "CRITICALITY": "Criticality",
+            "ENVIRONMENT": "Environment",
+            "OS": "OS",
+            "PATCH_GROUP": "Patch Group",
+        }
+
+        label = label_map.get(field_name, field_name.replace("_", " ").title())
+
+        format_instruction = f"""
+The user is asking for one specific CI inventory field.
+
+Return exactly one line in this format:
+
+{label}: VALUE
+
+Use only the value from {field_name}.
+No heading.
+No explanation.
+No extra fields.
+If the value is missing, say:
+{label}: Not found
+"""
+    elif intent == "cloud":
+        format_instruction = """
 The user is asking about Azure inventory or cloud resources.
 
 Use only the Azure Context as evidence.
@@ -316,6 +600,9 @@ Format:
 Summarize what was found.
 
 ## Details
+
+If AZURE_QUERY_TYPE is cost_month_to_date:
+Show month-to-date Azure cost and currency.
 
 If AZURE_QUERY_TYPE is resource_inventory:
 Group resources by type and list important resources.

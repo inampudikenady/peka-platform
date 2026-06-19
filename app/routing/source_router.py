@@ -46,6 +46,9 @@ def route_sources(question: str) -> dict:
         "resource group",
         "resources in azure",
         "azure resources",
+        "virtual machine",
+        "vm",
+        "vms",
     ]
 
     health_words = [

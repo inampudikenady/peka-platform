@@ -4,6 +4,7 @@ from app.models import AskRequest, AskResponse
 from app.rag_engine import run_peka_question
 from app.correlation.context_builder import enrich_question_with_operational_context
 from app.routing.source_router import route_sources
+from app.sources.azure.azure_response import build_azure_response
 
 
 router = APIRouter()
@@ -14,6 +15,13 @@ def ask(req: AskRequest):
     route = route_sources(req.question)
     intent = route["intent"]
     sources = route["sources"]
+
+    if sources.get("azure"):
+        return {
+            "question": req.question,
+            "answer": build_azure_response(req.question),
+            "sources": [],
+        }
 
     enriched_question = enrich_question_with_operational_context(req.question)
 

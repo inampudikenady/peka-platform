@@ -205,27 +205,37 @@ Format exactly like this:
 ## Log Search
 
 - Search term: LOG_SEARCH
-- Matches in last 2 hours: LOG_COUNT_LAST_2H
+- Time window: last LOG_WINDOW_HOURS hours
+- Matches: LOG_COUNT
+
+## Summary
+
+Summarize the log findings by category.
+Group repeated messages together.
+Do not list the same repeated error more than 3 times.
+Prefer showing distinct issues over repeated duplicate lines.
+
+Use categories such as:
+- Authentication failures
+- Database connectivity
+- Application response/performance
+- Container/runtime events
+- CPU or memory warnings
 
 ## Notable Log Entries
 
-If LOG_COUNT_LAST_2H is 0, say:
-No matching logs found in the last 2 hours.
+List up to 8 distinct or representative log entries.
+Do not dump all repeated logs.
+If there are repeated login failures, summarize the count and show only the latest 2 examples.
 
-If logs exist, summarize important logs/events in readable operator language.
-
-For Windows events include:
-- source
-- event ID
-- level
-- message
+If LOG_COUNT is 0, say:
+No matching logs found in the selected time window.
 
 Do not show CI_LINK if it is empty.
 Do not show placeholder text.
 Do not dump raw JSON.
 Do not mention vector DB or RAG.
 """
-
     elif intent == "docs":
         format_instruction = """
 The user is asking for an operational action or procedure involving this CI.

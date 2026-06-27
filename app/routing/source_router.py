@@ -9,7 +9,7 @@ Flow:
 
 Sources:
     cmdb        Local CMDB / ServiceNow CI details
-    metrics     Prometheus / Docker metrics
+    metrics     Prometheus host metrics
     logs        Loki logs
     tickets     Zammad / ServiceNow incidents
     docs        RAG documentation

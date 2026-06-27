@@ -23,7 +23,7 @@ def extract_log_search(question: str, identifier: str) -> str:
     q_lower = q.lower()
 
     # Explicit search phrase support:
-    # "search logs for database timeout on linux-demo-002"
+    # "search logs for database timeout on peka-linux-002"
     marker = "search logs for "
     if marker in q_lower:
         start = q_lower.find(marker) + len(marker)

@@ -306,6 +306,8 @@ LOAD_AVERAGE_15M: {load.get("load15")}
 ===== Metrics Snapshot =====
 
 NODE_STATUS: {monitoring.get("status")}
+NODE_EXPORTER_STATUS: {(monitoring.get("node_exporter") or {}).get("status")}
+PROCESS_EXPORTER_STATUS: {(monitoring.get("process_exporter") or {}).get("status")}
 CPU_PERCENT: {monitoring.get("cpu_percent")}
 
 MEMORY_TOTAL_GB: {memory.get("total_gb")}

@@ -22,9 +22,11 @@ def _error_context(data) -> str:
 
 AZURE_ERROR: true
 AZURE_ERROR_MESSAGE: {data.get("message", "Unknown Azure CLI error")}
+AZURE_ERROR_STATUS_CODE: {data.get("status_code") or ""}
+AZURE_RETRY_AFTER_SECONDS: {data.get("retry_after_seconds") or ""}
 
 ACTION_REQUIRED:
-Run az login and confirm subscription access.
+{data.get("action_required", "Review the Azure CLI error and confirm subscription access.")}
 """
 
 

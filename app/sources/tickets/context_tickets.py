@@ -11,6 +11,7 @@ Supported:
 import os
 
 from app.sources.servicenow.servicenow_client import get_ci_summary
+from app.sources.cmdb.cmdb_csv import get_ci
 from app.sources.tickets.zammad_client import get_tickets_for_ci
 from dotenv import load_dotenv
 
@@ -56,7 +57,45 @@ def build_servicenow_ticket_context(identifier: str):
 
 
 def build_zammad_ticket_context(identifier: str):
-    tickets = get_tickets_for_ci(identifier)
+    ci = get_ci(identifier) or {}
+
+    match_terms = []
+    for value in [
+        identifier,
+        ci.get("ci_name"),
+        ci.get("monitoring_host"),
+        ci.get("ip"),
+        ci.get("application"),
+    ]:
+        if value and value not in match_terms:
+            match_terms.append(value)
+
+    seen = set()
+    matched = []
+
+    for term in match_terms:
+        for ticket in get_tickets_for_ci(term):
+            text = " ".join(
+                str(x or "")
+                for x in [
+                    ticket.get("number"),
+                    ticket.get("title"),
+                    ticket.get("created_at"),
+                    ticket.get("updated_at"),
+                ]
+            ).lower()
+
+            # Keep only tickets that mention an exact CI/host/IP/app term.
+            # This prevents broad Zammad search results from attaching unrelated tickets.
+            if not any(str(t).lower() in text for t in match_terms):
+                continue
+
+            key = ticket.get("id") or ticket.get("number")
+            if key in seen:
+                continue
+
+            seen.add(key)
+            matched.append(ticket)
 
     return _build_ticket_context_from_items(
         provider="zammad",
@@ -70,7 +109,7 @@ def build_zammad_ticket_context(identifier: str):
                 "state": ticket.get("state_id"),
                 "priority": ticket.get("priority_id"),
             }
-            for ticket in tickets
+            for ticket in matched
         ],
     )
 

@@ -94,48 +94,36 @@ Format:
 # Server Health Check - CI_NAME
 
 ## 1. CI Details
-
-- CI link: CI_LINK
 - IP address: IP_ADDRESS
 - OS: OS
 - Description: DESCRIPTION
 
 ## 2. Runtime Status
 
-For Docker/container mode include:
-- Node status: NODE_STATUS
-- Container state: CONTAINER_STATE
-- Container running: CONTAINER_RUNNING
-- Container status: CONTAINER_STATUS
-- Container ID: CONTAINER_ID
+Include only VM/host runtime fields from the context:
+- Node exporter status
+- Process exporter status, if available
+- Uptime hours
+- Uptime days
+- Load average 1m
+- Load average 5m
+- Load average 15m
 
-For VM mode include:
-- Node status: NODE_STATUS
-- Uptime hours: UPTIME_HOURS
-- Uptime days: UPTIME_DAYS
-- Load average 1m: LOAD_AVERAGE_1M
-- Load average 5m: LOAD_AVERAGE_5M
-- Load average 15m: LOAD_AVERAGE_15M
-
-Only include fields that exist in the context.
+Do not mention Docker, containers, cAdvisor, or container mode.
 
 ## 3. Current Metrics
 
-For Docker/container mode include:
-- CPU percent: CPU_PERCENT
-- Memory used MB: MEMORY_USED_MB
-- Memory working set MB: MEMORY_WORKING_SET_MB
-
-For VM mode include:
-- CPU percent: CPU_PERCENT
-- Memory total GB: MEMORY_TOTAL_GB
-- Memory used GB: MEMORY_USED_GB
-- Memory available GB: MEMORY_AVAILABLE_GB
-- Memory used percent: MEMORY_USED_PERCENT
+Include only VM/host metrics from the context:
+- CPU percent
+- Memory total GB
+- Memory used GB
+- Memory available GB
+- Memory used percent
 - Filesystems
 - Top CPU processes
 - Top memory processes
 
+Do not mention Docker, containers, cAdvisor, or indexed knowledge.
 Only include fields that exist in the context.
 
 ## 4. Logs - Last 2 Hours
@@ -154,9 +142,10 @@ No tickets were found in the last 30 days.
 
 Write exactly 3 bullets:
 - Current state: summarize current status and metrics.
-- Logs: summarize log status.
+- Logs: summarize only the actionable log result from section 4. If section 4 says no actionable error logs were found, do not mention older, ignored, filtered, or non-actionable log entries.
 - Tickets: summarize ticket status.
 
+Do not infer issues from ignored or filtered logs.
 Do not mention:
 - RAG
 - vector DB
@@ -174,7 +163,7 @@ Format exactly like this:
 
 # Ticket History - CI_NAME
 
-**CI:** [CI_NAME](CI_LINK)
+**CI:** CI_NAME
 **IP Address:** IP_ADDRESS
 
 ## Related Tickets - Last 30 Days
@@ -231,7 +220,7 @@ If there are repeated login failures, summarize the count and show only the late
 If LOG_COUNT is 0, say:
 No matching logs found in the selected time window.
 
-Do not show CI_LINK if it is empty.
+Never show CI_LINK. Always show CI_NAME as plain text.
 Do not show placeholder text.
 Do not dump raw JSON.
 Do not mention vector DB or RAG.
@@ -251,7 +240,7 @@ Format:
 
 # Procedure Check - CI_NAME
 
-**CI:** [CI_NAME](CI_LINK)
+**CI:** CI_NAME
 **Observed OS:** OS
 **IP Address:** IP_ADDRESS
 
@@ -435,6 +424,7 @@ If AZURE_QUERY_TYPE is virtual_machine_detail, format exactly:
 - Public IPs: PUBLIC_IPS
 - OS Type: OS_TYPE
 
+Do not infer issues from ignored or filtered logs.
 Do not mention:
 - RAG
 - vector DB
@@ -550,6 +540,7 @@ If AZURE_QUERY_TYPE is virtual_machines, format exactly:
 
 List VMs with resource group, location, state, size, private IP, and public IP.
 
+Do not infer issues from ignored or filtered logs.
 Do not mention:
 - RAG
 - vector DB
@@ -626,6 +617,7 @@ List VMs with resource group, location, state, size, private IP, and public IP.
 If AZURE_ERROR is true:
 Show the Azure error message and action required.
 
+Do not infer issues from ignored or filtered logs.
 Do not mention:
 - RAG
 - vector DB
@@ -646,7 +638,7 @@ Format exactly like this:
 
 # CI Overview - CI_NAME
 
-**CI:** [CI_NAME](CI_LINK)
+**CI:** CI_NAME
 **IP Address:** IP_ADDRESS
 **OS:** OS
 **Application:** APPLICATION
@@ -657,7 +649,7 @@ Format exactly like this:
 **Description:** DESCRIPTION
 
 Only include fields that exist in the context.
-If CI_LINK is empty, show CI_NAME as plain text, not a broken markdown link.
+Always show CI_NAME as plain text. Never hyperlink CI_NAME.
 """
 
     return f"""
@@ -667,6 +659,7 @@ The user asked:
 
 Use the following live operational context as authoritative evidence.
 
+Do not infer issues from ignored or filtered logs.
 Do not mention:
 - RAG
 - vector DB
@@ -675,6 +668,8 @@ Do not mention:
 - JSON
 
 Do not dump raw fields.
+
+Never create a hyperlink for CI_NAME. Ticket numbers may be hyperlinks, but CI names must be plain text.
 
 Answer based on the user intent and the format instructions.
 

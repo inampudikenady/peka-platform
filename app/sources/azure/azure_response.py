@@ -40,13 +40,14 @@ def build_azure_response(question: str) -> str:
 
     if "AZURE_ERROR: true" in context:
         message = _get_value(context, "AZURE_ERROR_MESSAGE")
+        action_required = _get_multiline_value(context, "ACTION_REQUIRED")
         return f"""# Azure Error
 
 {message}
 
 ## Action Required
 
-Run az login and confirm subscription access.
+{action_required}
 """
 
     query_type = _get_value(context, "AZURE_QUERY_TYPE")
@@ -73,6 +74,36 @@ Run az login and confirm subscription access.
         return _resource_inventory(context)
 
     return context
+
+
+def _get_multiline_value(context: str, key: str) -> str:
+    prefix = f"{key}:"
+    lines = context.splitlines()
+
+    for index, line in enumerate(lines):
+        if line.startswith(prefix):
+            values = []
+
+            remainder = line.split(":", 1)[1].strip()
+            if remainder:
+                values.append(remainder)
+
+            for next_line in lines[index + 1:]:
+                stripped = next_line.strip()
+
+                if not stripped:
+                    if values:
+                        break
+                    continue
+
+                if stripped.endswith(":") and not stripped.startswith("-"):
+                    break
+
+                values.append(stripped)
+
+            return "\n".join(values).strip()
+
+    return ""
 
 
 def _subscription_header(context: str) -> str:

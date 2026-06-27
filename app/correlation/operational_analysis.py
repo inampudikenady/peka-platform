@@ -24,15 +24,27 @@ def _resolve_cmdb_ci(identifier: str) -> dict:
     """
     Resolve CI from the configured CMDB provider.
 
-    CMDB_PROVIDER=csv        -> local tuple_cmdb.csv
-    CMDB_PROVIDER=servicenow -> ServiceNow CMDB
+    CMDB_PROVIDER=auto       -> try local CSV first, then ServiceNow
+    CMDB_PROVIDER=csv        -> local tuple_cmdb.csv only
+    CMDB_PROVIDER=servicenow -> ServiceNow CMDB only
     """
-    cmdb_provider = os.getenv("CMDB_PROVIDER", "servicenow").lower()
+    cmdb_provider = os.getenv("CMDB_PROVIDER", "auto").lower()
 
-    if cmdb_provider == "csv":
+    if cmdb_provider in ("csv", "auto"):
         ci = get_ci(identifier)
 
-        if not ci:
+        if ci:
+            return {
+                "found": True,
+                "provider": "csv",
+                "ci": ci,
+                "ci_name": ci.get("ci_name"),
+                "ip_address": ci.get("ip"),
+                "display_name": ci.get("ci_name"),
+                "description": ci.get("notes"),
+            }
+
+        if cmdb_provider == "csv":
             return {
                 "found": False,
                 "provider": "csv",
@@ -44,16 +56,6 @@ def _resolve_cmdb_ci(identifier: str) -> dict:
                     "Validate CI name/hostname/IP or update tuple_cmdb.csv.",
                 ),
             }
-
-        return {
-            "found": True,
-            "provider": "csv",
-            "ci": ci,
-            "ci_name": ci.get("ci_name"),
-            "ip_address": ci.get("ip"),
-            "display_name": ci.get("ci_name"),
-            "description": ci.get("notes"),
-        }
 
     snow = get_ci_summary(identifier)
 

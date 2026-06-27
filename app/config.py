@@ -49,7 +49,7 @@ def get_settings(mask_secrets: bool = True) -> dict:
         "auth_provider": _get("AUTH_PROVIDER", "local"),
         "cmdb_provider": _get("CMDB_PROVIDER", "auto"),
         "ticket_provider": _get("TICKET_PROVIDER", "zammad"),
-        "monitoring_provider": _get("MONITORING_PROVIDER", "docker_prometheus"),
+        "monitoring_provider": _get("MONITORING_PROVIDER", "prometheus"),
         "log_provider": _get("LOG_PROVIDER", "loki"),
 
         "peka_collection": COLLECTION_NAME,

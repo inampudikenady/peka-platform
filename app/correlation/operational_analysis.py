@@ -6,7 +6,6 @@ from app.sources.servicenow.servicenow_client import resolve_ci, get_ci_summary
 from app.sources.cmdb.cmdb_csv import get_ci
 from app.sources.metrics.prometheus_client import get_linux_host_summary
 from app.sources.logs.loki_client import query_logs, query_errors
-from app.sources.metrics.prometheus_docker_client import get_container_summary
 
 load_dotenv()
 
@@ -178,10 +177,7 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
 
     monitoring_provider = os.getenv("MONITORING_PROVIDER", "prometheus").lower()
 
-    if monitoring_provider == "docker_prometheus":
-         monitoring = get_container_summary(ci_name)
-    else:
-         monitoring = get_linux_host_summary(ip_address)
+    monitoring = get_linux_host_summary(ip_address)
 
     if monitoring.get("status") != "up":
         findings.append(

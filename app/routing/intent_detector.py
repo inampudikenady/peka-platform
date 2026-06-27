@@ -4,7 +4,7 @@ intent_detector.py
 Purpose:
     Analyze a user question and determine:
     - Operational intent: cmdb, health, logs, history, docs
-    - CI hostname, container name, or IP address references
+    - CI hostname, IP address references
 
 Used by:
     context_builder.py
@@ -25,10 +25,10 @@ def extract_identifier(question: str):
         return ip_match.group(0)
 
     hostname_patterns = [
-        # host/container names ending with -001, -002, etc.
+        # hostnames ending with -001, -002, etc.
         r"\b[a-z0-9]+(?:-[a-z0-9]+)+-\d{3}\b",
 
-        # host/container names with multiple dash sections
+        # hostnames with multiple dash sections
         r"\b[a-z][a-z0-9-]{2,}\b",
     ]
 
@@ -58,7 +58,7 @@ def extract_identifier(question: str):
         "server",
         "host",
         "node",
-        "container",
+        
         "performance",
     }
 

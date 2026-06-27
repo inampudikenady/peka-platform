@@ -2,13 +2,13 @@
 context_health.py
 
 Purpose:
-    Build a simple operational health context for a CI or container.
+    Build a simple operational health context for a managed host.
 
 Flow for health questions:
     1. Get CI/inventory details
     2. Get ticket context from selected ticket provider
     3. Get metrics from selected monitoring provider
-       - prometheus: VM/node_exporter flow
+       - prometheus: VM host exporter flow
     4. Get logs from Loki for the last 2 hours
     5. Reduce log noise by grouping repeated error lines
 
@@ -259,7 +259,7 @@ Do not claim a ticket was caused by a log or metric.
 
 def build_health_context(identifier: str):
     """
-    Build health context for a hostname, IP address, or local container.
+    Build health context for a hostname or IP address.
     """
     monitoring_provider = os.getenv(
         "MONITORING_PROVIDER",

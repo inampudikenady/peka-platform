@@ -29,30 +29,27 @@ Flow:
     Structured Prompt Context
 """
 
-import os
-from dotenv import load_dotenv
-
-from app.sources.servicenow.servicenow_client import get_ci_summary
-from app.sources.cmdb.cmdb_csv import get_ci
-
-load_dotenv()
-
-CMDB_PROVIDER = os.getenv("CMDB_PROVIDER", "servicenow").lower()
+from app.sources.cmdb.inventory import get_inventory_summary, resolve_inventory
 
 
 def build_cmdb_context(identifier: str):
+    data = resolve_inventory(identifier)
+    provider = data.get("provider")
 
-    if CMDB_PROVIDER == "csv":
+    if provider == "csv":
         return build_csv_cmdb_context(identifier)
 
-    return build_servicenow_cmdb_context(identifier)
+    if provider == "servicenow":
+        return build_servicenow_cmdb_context(identifier)
+
+    raise RuntimeError(f"Unsupported CMDB provider: {provider}")
 
 
 def build_csv_cmdb_context(identifier: str):
+    data = resolve_inventory(identifier)
+    ci = data.get("cmdb_record", {}) or {}
 
-    ci = get_ci(identifier)
-
-    if not ci:
+    if not data.get("found"):
         return f"""
 ===== Local CMDB Context =====
 
@@ -63,22 +60,24 @@ CI not found in local CMDB for:
     return f"""
 ===== Local CMDB Context =====
 
-CI_NAME: {ci.get("ci_name")}
-HOSTNAME: {ci.get("hostname")}
-IP_ADDRESS: {ci.get("ip")}
+CI_NAME: {ci.get("name")}
+HOSTNAME: {ci.get("monitoring_host")}
+IP_ADDRESS: {ci.get("ip_address")}
 APPLICATION: {ci.get("application")}
 OWNER: {ci.get("owner")}
 ENVIRONMENT: {ci.get("environment")}
-OS_TYPE: {ci.get("os_type")}
+OS_TYPE: {ci.get("os")}
 CRITICALITY: {ci.get("criticality")}
 PATCH_GROUP: {ci.get("patch_group")}
-NOTES: {ci.get("notes")}
+NOTES: {ci.get("short_description")}
 """
 
 
 def build_servicenow_cmdb_context(identifier: str):
+    data = get_inventory_summary(identifier)
 
-    data = get_ci_summary(identifier)
+    if data.get("provider") != "servicenow":
+        return build_cmdb_context(identifier)
 
     if not data.get("found"):
         return f"""

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
+from app.sources.cmdb.inventory import resolve_inventory
 from app.sources.logs.loki_client import query_logs, query_errors
-from app.sources.servicenow.servicenow_client import resolve_ci
 
 
 router = APIRouter(prefix="/tools/logs", tags=["logs"])
@@ -14,7 +14,7 @@ def search_logs(
     hours: int = Query(24, description="Lookback window in hours"),
     limit: int = Query(50, description="Max log lines"),
 ):
-    resolved = resolve_ci(identifier)
+    resolved = resolve_inventory(identifier)
 
     if resolved.get("found"):
         ci = resolved["cmdb_record"]
@@ -36,7 +36,7 @@ def error_logs(
     hours: int = Query(24, description="Lookback window in hours"),
     limit: int = Query(50, description="Max log lines"),
 ):
-    resolved = resolve_ci(identifier)
+    resolved = resolve_inventory(identifier)
 
     if resolved.get("found"):
         ci = resolved["cmdb_record"]

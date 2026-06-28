@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tuple Assistant</title>
+  <script>
+    window.__tupleAssetBase =
+      window.location.pathname === "/tuple" || window.location.pathname.startsWith("/tuple/")
+        ? "/tuple/"
+        : "/";
+
+    const style = document.createElement("link");
+    style.rel = "stylesheet";
+    style.href = `${window.__tupleAssetBase}css/style.css`;
+    document.head.appendChild(style);
+  </script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <button id="historyBtn" class="icon-btn" type="button" aria-label="Open history">
+        <span></span>
+        <span></span>
+      </button>
+      <div class="brand-small" aria-label="Tuple">Tuple</div>
+      <button id="newChatBtn" class="ghost-btn" type="button">New chat</button>
+    </header>
+
+    <section id="hero" class="hero">
+      <p class="product-name">Tuple</p>
+      <h1>Enterprise Assistant</h1>
+      <p class="subtag">Infrastructure • Operations • Knowledge</p>
+      <form id="askForm" class="ask-box">
+        <textarea id="question" rows="1" placeholder="Ask anything about your environment..."></textarea>
+        <button id="askBtn" type="submit">Ask</button>
+      </form>
+
+      <div class="suggestions">
+        <button data-question="What can you help me with?">Capabilities</button>
+        <button data-question="Check server health">Server health check</button>
+        <button data-question="Show recent incidents">Recent incidents</button>
+        <button data-question="Show error logs">Error log review</button>
+        <button data-question="What is my Azure bill this month?">Azure spend</button>
+      </div>
+    </section>
+
+    <section id="conversation" class="conversation hidden" aria-live="polite"></section>
+
+    <form id="followupForm" class="followup hidden">
+      <textarea id="followup" rows="1" placeholder="Ask a follow-up..."></textarea>
+      <button type="submit">Send</button>
+    </form>
+
+    <div id="historyOverlay" class="history-overlay hidden"></div>
+    <aside id="historyPanel" class="history hidden" aria-label="Conversation history">
+      <div class="history-head">
+        <strong>Recent conversations</strong>
+        <button id="closeHistory" class="close-btn" type="button" aria-label="Close history">×</button>
+      </div>
+      <div id="historyList" class="history-list">
+        <div class="empty">No saved history yet.</div>
+      </div>
+    </aside>
+
+    <footer class="footer">Powered by PEKA</footer>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script>
+    const appScript = document.createElement("script");
+    appScript.src = `${window.__tupleAssetBase}js/app.js`;
+    document.body.appendChild(appScript);
+  </script>
+</body>
+</html>

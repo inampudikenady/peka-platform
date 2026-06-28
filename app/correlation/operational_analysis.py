@@ -1,13 +1,6 @@
-import os
-
-from dotenv import load_dotenv
-
-from app.sources.servicenow.servicenow_client import resolve_ci, get_ci_summary
-from app.sources.cmdb.cmdb_csv import get_ci
+from app.sources.cmdb.inventory import get_inventory_summary
 from app.sources.metrics.prometheus_client import get_linux_host_summary
 from app.sources.logs.loki_client import query_logs, query_errors
-
-load_dotenv()
 
 
 def _severity(level: str, finding: str, evidence: str, recommendation: str = ""):
@@ -23,69 +16,43 @@ def _resolve_cmdb_ci(identifier: str) -> dict:
     """
     Resolve CI from the configured CMDB provider.
 
-    CMDB_PROVIDER=auto       -> try local CSV first, then ServiceNow
-    CMDB_PROVIDER=csv        -> local tuple_cmdb.csv only
+    CMDB_PROVIDER=csv        -> local CSV CMDB only
     CMDB_PROVIDER=servicenow -> ServiceNow CMDB only
     """
-    cmdb_provider = os.getenv("CMDB_PROVIDER", "auto").lower()
+    data = get_inventory_summary(identifier)
+    provider = data.get("provider")
 
-    if cmdb_provider in ("csv", "auto"):
-        ci = get_ci(identifier)
+    if not data.get("found"):
+        provider_label = "local CMDB" if provider == "csv" else "ServiceNow CMDB"
+        recommendation = (
+            "Validate CI name/hostname/IP or update tuple_cmdb.csv."
+            if provider == "csv"
+            else "Validate hostname/IP or populate ServiceNow CMDB."
+        )
 
-        if ci:
-            return {
-                "found": True,
-                "provider": "csv",
-                "ci": ci,
-                "ci_name": ci.get("ci_name"),
-                "ip_address": ci.get("ip"),
-                "display_name": ci.get("ci_name"),
-                "description": ci.get("notes"),
-            }
+        return {
+            "found": False,
+            "provider": provider,
+            "summary": f"CI was not found in {provider_label}.",
+            "finding": _severity(
+                "warning",
+                "CI not found",
+                f"No {provider_label} record found for {identifier}.",
+                recommendation,
+            ),
+        }
 
-        if cmdb_provider == "csv":
-            return {
-                "found": False,
-                "provider": "csv",
-                "summary": "CI was not found in local CMDB.",
-                "finding": _severity(
-                    "warning",
-                    "CI not found",
-                    f"No local CMDB record found for {identifier}.",
-                    "Validate CI name/hostname/IP or update tuple_cmdb.csv.",
-                ),
-            }
-
-    snow = get_ci_summary(identifier)
-
-    if snow.get("found"):
-        ci = snow.get("cmdb_record", {}) or {}
-    else:
-        resolved = resolve_ci(identifier)
-
-        if not resolved.get("found"):
-            return {
-                "found": False,
-                "provider": "servicenow",
-                "summary": "CI was not found in ServiceNow CMDB.",
-                "finding": _severity(
-                    "warning",
-                    "CI not found",
-                    f"No ServiceNow CMDB record found for {identifier}.",
-                    "Validate hostname/IP or populate ServiceNow CMDB.",
-                ),
-            }
-
-        ci = resolved.get("cmdb_record", {}) or {}
+    ci = data.get("cmdb_record", {}) or {}
 
     return {
         "found": True,
-        "provider": "servicenow",
+        "provider": provider,
         "ci": ci,
         "ci_name": ci.get("name"),
         "ip_address": ci.get("ip_address"),
         "display_name": ci.get("name"),
         "description": ci.get("short_description"),
+        "incidents_last_30_days": data.get("incidents_last_30_days", []) or [],
     }
 
 
@@ -127,22 +94,9 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
     ip_address = resolved_ci.get("ip_address")
     description = resolved_ci.get("description")
 
-    incidents = []
+    incidents = resolved_ci.get("incidents_last_30_days", []) or []
 
     if cmdb_provider == "servicenow":
-        incident_candidates = []
-
-        for lookup in [identifier, ci_name, ip_address]:
-            if lookup and lookup not in incident_candidates:
-                incident_candidates.append(lookup)
-
-        for lookup in incident_candidates:
-            snow_lookup = get_ci_summary(lookup)
-            incidents = snow_lookup.get("incidents_last_30_days", []) or []
-
-            if incidents:
-                break
-
         if incidents:
             findings.append(
                 _severity(
@@ -174,8 +128,6 @@ def analyze_ci(identifier: str, hours: int = 24) -> dict:
             "overall_severity": "warning",
             "summary": "CI found, but monitoring correlation cannot run because IP address is missing.",
         }
-
-    monitoring_provider = os.getenv("MONITORING_PROVIDER", "prometheus").lower()
 
     monitoring = get_linux_host_summary(ip_address)
 

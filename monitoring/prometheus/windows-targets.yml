@@ -1,4 +1,0 @@
-- targets: ["10.70.1.4:9182"]
-  labels:
-    host: "peka-dev-win-sea-001"
-    os: "windows"

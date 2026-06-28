@@ -41,14 +41,26 @@ def _mask(name: str, value: str) -> str:
     return value
 
 
+def _validated_provider(env_name: str, default: str, allowed: set[str]) -> str:
+    value = os.getenv(env_name, default).strip().lower()
+
+    if value not in allowed:
+        allowed_values = ", ".join(sorted(allowed))
+        raise ValueError(
+            f"Unsupported {env_name} '{value}'. Supported values: {allowed_values}."
+        )
+
+    return value
+
+
 def get_settings(mask_secrets: bool = True) -> dict:
     settings = {
         "company": _get("COMPANY", "Local Demo"),
         "customer_profile": _get("CUSTOMER_PROFILE", "local"),
 
         "auth_provider": _get("AUTH_PROVIDER", "local"),
-        "cmdb_provider": _get("CMDB_PROVIDER", "auto"),
-        "ticket_provider": _get("TICKET_PROVIDER", "zammad"),
+        "cmdb_provider": _validated_provider("CMDB_PROVIDER", "csv", {"csv", "servicenow"}),
+        "ticket_provider": _validated_provider("TICKET_PROVIDER", "zammad", {"zammad", "servicenow"}),
         "monitoring_provider": _get("MONITORING_PROVIDER", "prometheus"),
         "log_provider": _get("LOG_PROVIDER", "loki"),
 
@@ -106,3 +118,6 @@ def validate_settings() -> dict:
         "settings": get_settings(mask_secrets=True),
         "checks": checks,
     }
+
+# Runtime settings used by provider dispatchers.
+settings = get_settings(mask_secrets=False)

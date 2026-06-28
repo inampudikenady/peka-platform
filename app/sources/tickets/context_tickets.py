@@ -8,17 +8,15 @@ Supported:
     - zammad
 """
 
-import os
+from app.config import settings
 
-from app.sources.servicenow.servicenow_client import get_ci_summary
-from app.sources.cmdb.cmdb_csv import get_ci
+from app.sources.cmdb.inventory import resolve_inventory
+from app.sources.tickets.servicenow_ticket_client import get_incidents_for_ci
 from app.sources.tickets.zammad_client import get_tickets_for_ci
-from dotenv import load_dotenv
 
-load_dotenv()
 
 def build_ticket_context(identifier: str):
-    provider = os.getenv("TICKET_PROVIDER", "servicenow").lower()
+    provider = settings["ticket_provider"]
 
     if provider == "zammad":
         return build_zammad_ticket_context(identifier)
@@ -26,18 +24,11 @@ def build_ticket_context(identifier: str):
     if provider == "servicenow":
         return build_servicenow_ticket_context(identifier)
 
-    return f"""
-===== Ticket Context =====
-
-TICKET_PROVIDER: {provider}
-TICKET_COUNT_30D: 0
-HAS_TICKETS: false
-"""
+    raise RuntimeError(f"Unsupported ticket provider: {provider}")
 
 
 def build_servicenow_ticket_context(identifier: str):
-    data = get_ci_summary(identifier)
-    incidents = data.get("incidents_last_30_days", []) or []
+    incidents = get_incidents_for_ci(identifier)
 
     return _build_ticket_context_from_items(
         provider="servicenow",
@@ -57,14 +48,15 @@ def build_servicenow_ticket_context(identifier: str):
 
 
 def build_zammad_ticket_context(identifier: str):
-    ci = get_ci(identifier) or {}
+    resolved = resolve_inventory(identifier)
+    ci = resolved.get("cmdb_record", {}) or {}
 
     match_terms = []
     for value in [
         identifier,
-        ci.get("ci_name"),
+        ci.get("name"),
         ci.get("monitoring_host"),
-        ci.get("ip"),
+        ci.get("ip_address"),
         ci.get("application"),
     ]:
         if value and value not in match_terms:

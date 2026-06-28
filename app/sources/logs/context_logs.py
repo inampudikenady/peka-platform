@@ -14,7 +14,7 @@ Responsibilities:
 
 import re
 
-from app.sources.servicenow.servicenow_client import resolve_ci
+from app.sources.cmdb.inventory import resolve_inventory
 from app.sources.logs.loki_client import query_logs
 
 
@@ -101,7 +101,7 @@ def extract_log_hours(question: str, default_hours: int = 2) -> int:
 
 
 def build_logs_context(identifier: str, question: str = ""):
-    resolved = resolve_ci(identifier)
+    resolved = resolve_inventory(identifier)
 
     if resolved.get("found"):
         ci = resolved.get("cmdb_record", {})

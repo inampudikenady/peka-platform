@@ -1,14 +1,16 @@
 # app/routes/cmdb.py
 from fastapi import APIRouter
-from app.sources.cmdb.cmdb_csv import get_ci
+
+from app.sources.cmdb.inventory import resolve_inventory
 
 router = APIRouter()
 
 @router.get("/tools/cmdb/ci")
 def ci_lookup(ci: str):
-    result = get_ci(ci)
+    result = resolve_inventory(ci)
 
     return {
-        "found": result is not None,
-        "ci": result
+        "found": result.get("found", False),
+        "provider": result.get("provider"),
+        "ci": result.get("cmdb_record"),
     }

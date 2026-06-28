@@ -1,5 +1,3 @@
-import os
-
 from fastapi import FastAPI
 
 from app.config import (
@@ -11,16 +9,12 @@ from app.config import (
     FINAL_TOP_K,
     LLM_MODEL,
     RETRIEVAL_TOP_K,
+    settings,
 )
 from app.routes.ask import router as ask_router
 from app.routes.openai_v1 import router as openai_v1_router
-from app.routes.ui import router as ui_router
-from app.routes.servicenow import router as servicenow_router
-from app.routes.monitoring import router as monitoring_router
-from app.routes.logs import router as logs_router
-from app.routes.ops import router as ops_router
 from app.routes.cmdb import router as cmdb_router
-from app.routes import settings
+from app.routes import settings as settings_route
 
 
 
@@ -29,11 +23,11 @@ def print_startup_banner():
     print("\n====================================")
     print("PEKA Startup")
     print("====================================")
-    print(f"Customer Profile : {os.getenv('CUSTOMER_PROFILE', 'unknown')}")
-    print(f"Ticket Provider  : {os.getenv('TICKET_PROVIDER', 'unknown')}")
-    print(f"CMDB Provider    : {os.getenv('CMDB_PROVIDER', 'unknown')}")
-    print(f"Monitoring       : {os.getenv('MONITORING_PROVIDER', 'unknown')}")
-    print(f"Logs             : {os.getenv('LOG_PROVIDER', 'unknown')}")
+    print(f"Customer Profile : {settings['customer_profile']}")
+    print(f"Ticket Provider  : {settings['ticket_provider']}")
+    print(f"CMDB Provider    : {settings['cmdb_provider']}")
+    print(f"Monitoring       : {settings['monitoring_provider']}")
+    print(f"Logs             : {settings['log_provider']}")
     print("====================================\n")
 
 
@@ -44,13 +38,8 @@ app = FastAPI(title=f"{APP_NAME} - {APP_FULL_NAME}")
 
 app.include_router(ask_router)
 app.include_router(openai_v1_router)
-app.include_router(ui_router)
-app.include_router(servicenow_router)
-app.include_router(monitoring_router)
-app.include_router(logs_router)
-app.include_router(ops_router)
 app.include_router(cmdb_router)
-app.include_router(settings.router)
+app.include_router(settings_route.router)
 
 
 @app.get("/")
@@ -63,12 +52,12 @@ def root():
         "model": LLM_MODEL,
         "embedding_model": EMBED_MODEL_NAME,
         "retrieval": f"top{RETRIEVAL_TOP_K}_rerank_to_top{FINAL_TOP_K}_compressed",
-        "customer_profile": os.getenv("CUSTOMER_PROFILE", "unknown"),
-        "ticket_provider": os.getenv("TICKET_PROVIDER", "unknown"),
-        "cmdb_provider": os.getenv("CMDB_PROVIDER", "unknown"),
-        "monitoring_provider": os.getenv("MONITORING_PROVIDER", "unknown"),
-        "log_provider": os.getenv("LOG_PROVIDER", "unknown"),
-        "ui": "/ui",
+        "customer_profile": settings["customer_profile"],
+        "ticket_provider": settings["ticket_provider"],
+        "cmdb_provider": settings["cmdb_provider"],
+        "monitoring_provider": settings["monitoring_provider"],
+        "log_provider": settings["log_provider"],
+        "portal": "http://localhost:3001",
         "openai_compatible_base_url": "/v1",
     }
 
@@ -77,9 +66,9 @@ def root():
 def health():
     return {
         "status": "healthy",
-        "customer_profile": os.getenv("CUSTOMER_PROFILE", "unknown"),
-        "ticket_provider": os.getenv("TICKET_PROVIDER", "unknown"),
-        "cmdb_provider": os.getenv("CMDB_PROVIDER", "unknown"),
-        "monitoring_provider": os.getenv("MONITORING_PROVIDER", "unknown"),
-        "log_provider": os.getenv("LOG_PROVIDER", "unknown"),
+        "customer_profile": settings["customer_profile"],
+        "ticket_provider": settings["ticket_provider"],
+        "cmdb_provider": settings["cmdb_provider"],
+        "monitoring_provider": settings["monitoring_provider"],
+        "log_provider": settings["log_provider"],
     }

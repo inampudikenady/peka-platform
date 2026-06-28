@@ -56,7 +56,15 @@ def query_logs(host: str, search: str = "", hours: int = 24, limit: int = 50):
         logql += f' |= "{search}"'
 
     url = f"{LOKI_URL}/loki/api/v1/query_range"
-
+    print("\n===== LOKI QUERY =====")
+    print(f"URL       : {url}")
+    print(f"Host      : {host}")
+    print(f"Search    : {search!r}")
+    print(f"LogQL     : {logql}")
+    print(f"Start(ns) : {start_ns}")
+    print(f"End(ns)   : {end_ns}")
+    print(f"Limit     : {limit}")
+    print("======================")
     response = requests.get(
         url,
         params={
@@ -68,6 +76,12 @@ def query_logs(host: str, search: str = "", hours: int = 24, limit: int = 50):
         },
         timeout=20,
     )
+    print(f"Loki HTTP : {response.status_code}")
+
+    if response.status_code != 200:
+        print("===== LOKI ERROR =====")
+        print(response.text)
+        print("======================")
 
     response.raise_for_status()
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Query
 
+from app.sources.cmdb.inventory import resolve_inventory
 from app.sources.metrics.prometheus_client import get_linux_host_summary
-from app.sources.servicenow.servicenow_client import resolve_ci
 
 
 router = APIRouter(prefix="/tools/monitoring", tags=["monitoring"])
@@ -11,13 +11,13 @@ router = APIRouter(prefix="/tools/monitoring", tags=["monitoring"])
 def ci_monitoring_summary(
     identifier: str = Query(..., description="CI name or IP address")
 ):
-    ci_result = resolve_ci(identifier)
+    ci_result = resolve_inventory(identifier)
 
     if not ci_result.get("found"):
         return {
             "identifier": identifier,
             "found": False,
-            "message": "CI not found in ServiceNow CMDB",
+            "message": f"CI not found in {ci_result.get('provider')} CMDB",
         }
 
     ci = ci_result["cmdb_record"]

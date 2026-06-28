@@ -162,3 +162,7 @@ def get_ci_summary(identifier: str) -> dict:
         "cmdb_record": ci,
         "incidents_last_30_days": incidents,
     }
+
+
+def get_servicenow_ci_summary(identifier: str) -> dict:
+    return get_ci_summary(identifier)
